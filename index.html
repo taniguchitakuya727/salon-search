@@ -1,0 +1,1615 @@
+<!DOCTYPE html>
+<!--
+  ============================================================
+  リスト検索ツール — v1.4
+  ============================================================
+  Released: 2026-05-18
+  Source:   Google Sheets "リスト20251116"
+
+  Features:
+    ✓ B列下3桁マッチ検索 → B/C/D/E列表示
+    ✓ パスワード保護 (AES-256-GCM / PBKDF2-SHA256 250k)
+    ✓ 5分間隔の自動更新 + 手動更新ボタン
+    ✓ カードレイアウト表示
+    ✓ レスポンシブ対応 (PC/スマホ)
+    ✓ E列の編集機能 (GAS Webアプリ経由)
+    ✓ iOS Brave対応 (カスタムダイアログ・touchend)
+
+  Changes from v1.2:
+    ✓ C列も編集可能に (列を限定したい場合はGAS側 COLUMN_MAP で制御)
+    ✓ 汎用化: 編集ロジックを列名パラメータ化
+  ============================================================
+-->
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>リスト検索 — 下3桁マッチ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,800&family=JetBrains+Mono:wght@400;600&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #1a1612;
+    --paper: #f5f1e8;
+    --paper-2: #ebe5d4;
+    --accent: #c2410c;
+    --accent-soft: #fed7aa;
+    --muted: #6b5d4a;
+    --line: #d4cbb5;
+    --ok: #166534;
+    --warn: #92400e;
+    --err: #991b1b;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: 'Noto Sans JP', sans-serif;
+    min-height: 100vh;
+    background-image:
+      radial-gradient(circle at 20% 10%, rgba(194, 65, 12, 0.06) 0%, transparent 40%),
+      radial-gradient(circle at 80% 90%, rgba(20, 83, 45, 0.05) 0%, transparent 40%);
+  }
+
+  .wrap {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 48px 28px 96px;
+  }
+
+  /* ---------- Lock screen ---------- */
+  .lock-screen {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+
+  .lock-card {
+    background: var(--paper-2);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 48px 40px;
+    max-width: 440px;
+    width: 100%;
+    text-align: center;
+  }
+
+  .lock-icon {
+    font-size: 36px;
+    margin-bottom: 16px;
+    line-height: 1;
+  }
+
+  .lock-card .eyebrow {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 8px;
+  }
+
+  .lock-card h1 {
+    font-family: 'Fraunces', serif;
+    font-weight: 800;
+    font-size: 32px;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+    margin-bottom: 24px;
+  }
+
+  .lock-card h1 em {
+    font-style: italic;
+    color: var(--accent);
+    font-weight: 400;
+  }
+
+  .lock-card p.desc {
+    font-size: 13px;
+    color: var(--muted);
+    margin-bottom: 24px;
+    line-height: 1.6;
+  }
+
+  #pwd {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 18px;
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 2px;
+    padding: 14px 16px;
+    width: 100%;
+    color: var(--ink);
+    outline: none;
+    text-align: center;
+    letter-spacing: 0.1em;
+    transition: border-color 0.15s, background 0.15s;
+    margin-bottom: 12px;
+  }
+
+  #pwd:focus {
+    border-color: var(--accent);
+    background: #fff;
+  }
+
+  #unlockBtn {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    background: var(--ink);
+    color: var(--paper);
+    border: none;
+    padding: 16px 28px;
+    border-radius: 2px;
+    cursor: pointer;
+    transition: background 0.15s;
+    width: 100%;
+  }
+
+  #unlockBtn:hover { background: var(--accent); }
+  #unlockBtn:disabled { background: var(--muted); cursor: wait; }
+
+  .lock-msg {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--err);
+    margin-top: 16px;
+    min-height: 16px;
+    text-align: center;
+  }
+
+  .lock-msg.loading { color: var(--muted); }
+
+  .version-tag {
+    margin-top: 24px;
+    padding-top: 16px;
+    border-top: 1px solid var(--line);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    color: var(--muted);
+    opacity: 0.7;
+  }
+
+  .version-inline {
+    display: inline-block;
+    margin-left: 8px;
+    padding: 2px 6px;
+    background: var(--ink);
+    color: var(--paper);
+    border-radius: 2px;
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    vertical-align: 2px;
+  }
+
+  /* ---------- Header ---------- */
+  header {
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 24px;
+    margin-bottom: 40px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 24px;
+    flex-wrap: wrap;
+  }
+
+  .title-block .eyebrow {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 8px;
+  }
+
+  h1.main-title {
+    font-family: 'Fraunces', serif;
+    font-weight: 800;
+    font-size: clamp(32px, 5vw, 52px);
+    line-height: 1.05;
+    letter-spacing: -0.02em;
+  }
+
+  h1.main-title em {
+    font-style: italic;
+    color: var(--accent);
+    font-weight: 400;
+  }
+
+  .meta {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    text-align: right;
+    line-height: 1.6;
+  }
+
+  .lock-out {
+    background: none;
+    border: 1px solid var(--line);
+    color: var(--muted);
+    padding: 6px 10px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    cursor: pointer;
+    border-radius: 2px;
+    transition: all 0.15s;
+  }
+
+  .lock-out:hover {
+    border-color: var(--ink);
+    color: var(--ink);
+  }
+
+  .meta-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 6px;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+  }
+
+  .form-link {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    border: 1px solid var(--line);
+    padding: 6px 10px;
+    border-radius: 2px;
+    text-decoration: none;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+
+  .form-link:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  /* ---------- Search box ---------- */
+  .search {
+    background: var(--paper-2);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 32px;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 20px;
+    align-items: center;
+    margin-bottom: 8px;
+  }
+
+  .search label {
+    font-family: 'Fraunces', serif;
+    font-size: 20px;
+    font-weight: 600;
+  }
+
+  .search label span {
+    display: block;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 4px;
+    font-weight: 400;
+  }
+
+  #q {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 42px;
+    font-weight: 600;
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 2px;
+    padding: 12px 20px;
+    width: 100%;
+    color: var(--ink);
+    letter-spacing: 0.2em;
+    text-align: center;
+    outline: none;
+    transition: border-color 0.15s, background 0.15s;
+  }
+
+  #q:focus {
+    border-color: var(--accent);
+    background: #fff;
+  }
+
+  #q::placeholder {
+    color: var(--line);
+    letter-spacing: 0.2em;
+  }
+
+  #searchBtn {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    background: var(--ink);
+    color: var(--paper);
+    border: none;
+    padding: 18px 28px;
+    border-radius: 2px;
+    cursor: pointer;
+    transition: background 0.15s, transform 0.05s;
+  }
+
+  #searchBtn:hover { background: var(--accent); }
+  #searchBtn:active { transform: translateY(1px); }
+  #searchBtn:disabled { background: var(--muted); cursor: not-allowed; }
+
+  /* ---------- Status ---------- */
+  .status {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    padding: 12px 4px;
+    min-height: 36px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .status .dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--muted);
+  }
+
+  .status.ok .dot { background: var(--ok); }
+  .status.warn .dot { background: var(--warn); }
+  .status.err .dot { background: var(--err); }
+  .status.ok { color: var(--ok); }
+  .status.warn { color: var(--warn); }
+  .status.err { color: var(--err); }
+
+  /* ---------- Results ---------- */
+  .results {
+    margin-top: 32px;
+  }
+
+  .results-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 2px solid var(--ink);
+  }
+
+  .results-header h2 {
+    font-family: 'Fraunces', serif;
+    font-size: 22px;
+    font-weight: 600;
+  }
+
+  .results-header .count {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 0.1em;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--paper);
+  }
+
+  thead th {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--muted);
+    text-align: left;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--line);
+    font-weight: 600;
+  }
+
+  tbody td {
+    padding: 16px;
+    border-bottom: 1px solid var(--line);
+    font-size: 15px;
+    vertical-align: top;
+    line-height: 1.5;
+  }
+
+  tbody tr:hover { background: rgba(194, 65, 12, 0.04); }
+
+  tbody td:first-child {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 600;
+    color: var(--accent);
+    white-space: nowrap;
+  }
+
+  tbody td:first-child .match {
+    background: var(--accent-soft);
+    padding: 2px 4px;
+    border-radius: 2px;
+  }
+
+  .empty {
+    text-align: center;
+    padding: 64px 24px;
+    color: var(--muted);
+    font-family: 'Fraunces', serif;
+    font-style: italic;
+    font-size: 18px;
+  }
+
+  /* ---------- Result cards (B/C/D 左, E 右) ---------- */
+  .result-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .result-card {
+    display: grid;
+    grid-template-columns: minmax(220px, 1fr) 2fr;
+    gap: 24px;
+    padding: 20px 24px;
+    background: var(--paper);
+    transition: background 0.15s;
+  }
+
+  .result-card:hover {
+    background: rgba(194, 65, 12, 0.04);
+  }
+
+  .rc-left {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .rc-cell {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    line-height: 1.4;
+  }
+
+  .rc-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.15em;
+    color: var(--muted);
+    text-transform: uppercase;
+    min-width: 14px;
+    flex-shrink: 0;
+  }
+
+  .rc-value {
+    font-size: 15px;
+    color: var(--ink);
+    word-break: break-word;
+  }
+
+  .rc-left .rc-cell:first-child .rc-value {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 600;
+    color: var(--accent);
+    font-size: 16px;
+  }
+
+  .rc-left .rc-cell:first-child .match {
+    background: var(--accent-soft);
+    padding: 2px 4px;
+    border-radius: 2px;
+  }
+
+  .rc-right {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding-left: 24px;
+    border-left: 1px solid var(--line);
+  }
+
+  .rc-e-value {
+    font-family: 'Fraunces', serif;
+    font-size: 17px;
+    line-height: 1.6;
+    white-space: pre-wrap;
+  }
+
+  /* ---------- Edit mode (C列・E列共通) ---------- */
+  .rc-c-wrap, .rc-e-wrap {
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* C列はインライン的に表示 (元のrc-cellと近いレイアウト) */
+  .rc-c-wrap {
+    margin: 0;
+  }
+
+  .rc-edit-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 2px;
+  }
+
+  /* E列の header はラベル中央・ボタン右寄せ */
+  .rc-e-wrap .rc-edit-header {
+    justify-content: space-between;
+    margin-bottom: 6px;
+  }
+
+  .rc-c-value {
+    font-size: 15px;
+    color: var(--ink);
+    word-break: break-word;
+    padding-left: 24px; /* ラベル分のインデント */
+  }
+
+  .edit-btn {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    background: none;
+    color: var(--muted);
+    border: 1px solid var(--line);
+    padding: 2px 8px;
+    border-radius: 2px;
+    cursor: pointer;
+    transition: all 0.15s;
+    line-height: 1.2;
+  }
+
+  /* E列の編集ボタンは少し大きめ */
+  .rc-e-wrap .edit-btn {
+    padding: 4px 10px;
+    text-transform: uppercase;
+  }
+
+  .edit-btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .cell-textarea {
+    width: 100%;
+    font-family: 'Fraunces', serif;
+    font-size: 16px;
+    line-height: 1.6;
+    padding: 12px;
+    background: var(--paper);
+    border: 1px solid var(--accent);
+    border-radius: 2px;
+    resize: vertical;
+    outline: none;
+    color: var(--ink);
+    box-sizing: border-box;
+  }
+
+  /* C列は1行入力 */
+  .rc-c-wrap .cell-textarea {
+    font-family: 'Noto Sans JP', sans-serif;
+    font-size: 15px;
+    padding: 8px 10px;
+    resize: none;
+  }
+
+  .cell-textarea:focus {
+    background: #fff;
+  }
+
+  .cell-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+  }
+
+  /* C列の編集はコンパクトに */
+  .rc-c-wrap .cell-actions {
+    margin-top: 6px;
+  }
+
+  .btn-save, .btn-cancel {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 8px 16px;
+    border-radius: 2px;
+    cursor: pointer;
+    transition: all 0.15s;
+    border: none;
+  }
+
+  /* C列のボタンは小さめ */
+  .rc-c-wrap .btn-save, .rc-c-wrap .btn-cancel {
+    padding: 6px 12px;
+    font-size: 10px;
+  }
+
+  .btn-save {
+    background: var(--accent);
+    color: white;
+  }
+  .btn-save:hover { background: #9a3309; }
+  .btn-save:disabled { background: var(--muted); cursor: wait; }
+
+  .btn-cancel {
+    background: none;
+    color: var(--muted);
+    border: 1px solid var(--line);
+  }
+  .btn-cancel:hover { border-color: var(--ink); color: var(--ink); }
+  .btn-cancel:disabled { opacity: 0.5; cursor: wait; }
+
+  .cell-msg {
+    margin-top: 8px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    min-height: 14px;
+    color: var(--muted);
+  }
+  .cell-msg.loading { color: var(--muted); }
+  .cell-msg.ok { color: var(--ok); }
+  .cell-msg.err { color: var(--err); }
+
+  /* ---------- Refresh controls ---------- */
+  .status-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  #refreshBtn {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    background: none;
+    color: var(--muted);
+    border: 1px solid var(--line);
+    padding: 8px 14px;
+    border-radius: 2px;
+    cursor: pointer;
+    transition: all 0.15s;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  #refreshBtn:hover {
+    border-color: var(--ink);
+    color: var(--ink);
+  }
+
+  #refreshBtn:disabled {
+    opacity: 0.5;
+    cursor: wait;
+  }
+
+  #refreshBtn .icon {
+    display: inline-block;
+    transition: transform 0.5s;
+  }
+
+  #refreshBtn.spinning .icon {
+    animation: spin 0.8s linear infinite;
+  }
+
+  @keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+
+  @media (max-width: 640px) {
+    .search { grid-template-columns: 1fr; }
+    #q { font-size: 32px; }
+    header { flex-direction: column; align-items: flex-start; }
+    .meta { text-align: left; }
+
+    .result-card {
+      grid-template-columns: 1fr;
+      gap: 16px;
+      padding: 16px;
+    }
+    .rc-right {
+      padding-left: 0;
+      padding-top: 16px;
+      border-left: none;
+      border-top: 1px solid var(--line);
+    }
+  }
+
+  /* ---------- Custom confirm modal ---------- */
+  .confirm-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 9000;
+    padding: 20px;
+  }
+  .confirm-modal.active { display: flex; }
+
+  .confirm-box {
+    background: var(--paper);
+    border-radius: 4px;
+    padding: 28px 24px;
+    max-width: 480px;
+    width: 100%;
+    box-shadow: 0 12px 48px rgba(0,0,0,0.3);
+  }
+
+  .confirm-icon {
+    font-size: 28px;
+    text-align: center;
+    margin-bottom: 12px;
+  }
+
+  .confirm-msg {
+    font-family: 'Fraunces', serif;
+    font-size: 16px;
+    line-height: 1.5;
+    text-align: center;
+    margin-bottom: 20px;
+    color: var(--ink);
+  }
+
+  .confirm-diff {
+    background: var(--paper-2);
+    padding: 16px;
+    border-radius: 2px;
+    margin-bottom: 24px;
+    max-height: 200px;
+    overflow-y: auto;
+  }
+
+  .confirm-diff-row {
+    margin-bottom: 12px;
+  }
+  .confirm-diff-row:last-child { margin-bottom: 0; }
+
+  .confirm-diff-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 4px;
+  }
+
+  .confirm-diff-value {
+    font-size: 14px;
+    line-height: 1.5;
+    word-break: break-word;
+    white-space: pre-wrap;
+    padding: 8px 10px;
+    border-radius: 2px;
+  }
+  .confirm-diff-value.old {
+    background: rgba(153, 27, 27, 0.08);
+    color: #7f1d1d;
+  }
+  .confirm-diff-value.new {
+    background: rgba(22, 101, 52, 0.08);
+    color: #14532d;
+  }
+
+  .confirm-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end;
+  }
+
+  .confirm-btn-cancel, .confirm-btn-ok {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 12px 24px;
+    border-radius: 2px;
+    cursor: pointer;
+    border: none;
+    transition: all 0.15s;
+  }
+  .confirm-btn-cancel {
+    background: none;
+    color: var(--muted);
+    border: 1px solid var(--line);
+  }
+  .confirm-btn-cancel:hover {
+    border-color: var(--ink);
+    color: var(--ink);
+  }
+  .confirm-btn-ok {
+    background: var(--accent);
+    color: white;
+  }
+  .confirm-btn-ok:hover { background: #9a3309; }
+
+  /* ---------- Debug panel (iPhone等でコンソール見えない時用) ---------- */
+  #debugPanel {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    max-height: 40vh;
+    overflow-y: auto;
+    background: rgba(0,0,0,0.85);
+    color: #0f0;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    padding: 8px 12px;
+    z-index: 9999;
+    display: none;
+    line-height: 1.4;
+  }
+  #debugPanel.active { display: block; }
+  #debugPanel .dlog { margin-bottom: 2px; word-break: break-all; }
+  #debugPanel .dlog.err { color: #f66; }
+  #debugPanel .dlog.warn { color: #fc6; }
+  #debugClose {
+    position: fixed;
+    bottom: 6px;
+    right: 8px;
+    z-index: 10000;
+    background: #fff;
+    color: #000;
+    border: none;
+    padding: 4px 10px;
+    border-radius: 2px;
+    font-size: 11px;
+    font-family: 'JetBrains Mono', monospace;
+    cursor: pointer;
+    display: none;
+  }
+  #debugPanel.active ~ #debugClose { display: block; }
+</style>
+</head>
+<body>
+
+<!-- =====================  LOCK SCREEN  ===================== -->
+<div id="lockScreen" class="lock-screen">
+  <div class="lock-card">
+    <div class="lock-icon">🔒</div>
+    <div class="eyebrow">Protected Access</div>
+    <h1>リスト<em>20251116</em></h1>
+    <p class="desc">パスワードを入力してください</p>
+    <input id="pwd" type="password" autocomplete="off" placeholder="••••••••" autofocus />
+    <button id="unlockBtn" type="button">UNLOCK</button>
+    <div id="lockMsg" class="lock-msg"></div>
+    <div class="version-tag">v1.4</div>
+  </div>
+</div>
+
+<!-- =====================  MAIN APP  ===================== -->
+<div id="app" class="wrap" style="display:none">
+
+  <header>
+    <div class="title-block">
+      <div class="eyebrow">List Lookup / 下3桁検索 <span class="version-inline">v1.4</span></div>
+      <h1 class="main-title">リスト<em>20251116</em></h1>
+    </div>
+    <div class="meta">
+      B列下3桁 → B/C/D/E 表示<br>
+      <div class="meta-actions">
+        <a class="form-link" href="https://docs.google.com/forms/d/e/1FAIpQLScOvtVZFFTiNxanIyZOGpjP7U7sfU7R0nzxVUYdieLyOoG1GA/viewform?usp=send_form" target="_blank" rel="noopener">📝 入力フォーム</a>
+        <button class="lock-out" id="lockOutBtn">🔒 ロック</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="search">
+    <label for="q">
+      <span>3-digit input</span>
+      検索
+    </label>
+    <input id="q" type="text" inputmode="numeric" pattern="\d{3}" maxlength="3" placeholder="000" autocomplete="off" />
+    <button id="searchBtn" type="button">検索</button>
+  </div>
+
+  <div class="status-row">
+    <div id="status" class="status">
+      <span class="dot"></span>
+      <span id="statusText">データを読み込み中…</span>
+    </div>
+    <button id="refreshBtn" type="button" title="最新データを取得">
+      <span class="icon">↻</span>
+      <span>更新</span>
+    </button>
+  </div>
+
+  <section class="results">
+    <div class="results-header">
+      <h2>検索結果</h2>
+      <span id="count" class="count">— 件</span>
+    </div>
+    <div id="resultBody">
+      <div class="empty">3桁の数字を入力してください</div>
+    </div>
+  </section>
+
+</div>
+
+<!-- =====================  CUSTOM CONFIRM MODAL  ===================== -->
+<div id="confirmModal" class="confirm-modal">
+  <div class="confirm-box">
+    <div class="confirm-icon">⚠️</div>
+    <div id="confirmMessage" class="confirm-msg"></div>
+    <div class="confirm-diff">
+      <div class="confirm-diff-row">
+        <div class="confirm-diff-label">変更前</div>
+        <div id="confirmOld" class="confirm-diff-value old"></div>
+      </div>
+      <div class="confirm-diff-row">
+        <div class="confirm-diff-label">変更後</div>
+        <div id="confirmNew" class="confirm-diff-value new"></div>
+      </div>
+    </div>
+    <div class="confirm-actions">
+      <button id="confirmCancel" type="button" class="confirm-btn-cancel">キャンセル</button>
+      <button id="confirmOk" type="button" class="confirm-btn-ok">保存する</button>
+    </div>
+  </div>
+</div>
+
+<!-- =====================  DEBUG PANEL  ===================== -->
+<div id="debugPanel"></div>
+<button id="debugClose" type="button">閉じる</button>
+
+<script>
+/* ===========================================================
+   Debug logger (iPhone等のコンソール代わり)
+   URLに ?debug=1 を付けるとログ表示
+   =========================================================== */
+const DEBUG = new URLSearchParams(location.search).has('debug');
+const $debug = document.getElementById('debugPanel');
+const $debugClose = document.getElementById('debugClose');
+function dlog(msg, level) {
+  if (!DEBUG) return;
+  $debug.classList.add('active');
+  const line = document.createElement('div');
+  line.className = 'dlog' + (level ? ' ' + level : '');
+  const ts = new Date().toLocaleTimeString('ja-JP');
+  line.textContent = `[${ts}] ${msg}`;
+  $debug.appendChild(line);
+  $debug.scrollTop = $debug.scrollHeight;
+}
+$debugClose.addEventListener('click', () => $debug.classList.remove('active'));
+window.addEventListener('error', (e) => {
+  // ブラウザが注入するノイズ (Brave iOS等) はスキップ
+  const msg = e.message || '';
+  const file = e.filename || '';
+  if (
+    msg.includes('__firefox__') ||
+    msg.includes('DarkReader') ||
+    msg.includes('window.ethereum') ||
+    msg === 'Script error.' ||
+    msg === ''
+  ) return;
+  dlog('JS ERROR: ' + msg + ' @ ' + file + ':' + e.lineno, 'err');
+});
+window.addEventListener('unhandledrejection', (e) => dlog('PROMISE REJECT: ' + (e.reason && e.reason.message ? e.reason.message : e.reason), 'err'));
+if (DEBUG) dlog('Debug mode active');
+
+/* ===========================================================
+   ENCRYPTED PAYLOAD
+   AES-256-GCM, PBKDF2-SHA256 250k iterations
+   復号後のJSON: { csv, gas, apiPw }
+   =========================================================== */
+const ENCRYPTED = {
+  salt: "qINlAxPEQ/At6erMnq575w==",
+  iv:   "0KWfz0botXqrDao2",
+  data: "p4+d+Yjg16LPSa//SyI5QkjsJGTnWQIiShCK1JEeHVeVSipVeqkYxNXQFNjJoVpov9tlhN/+HuPUtfj229yvhM7vaZ2RAikpo8V3uaQdjL3PSyq/2NUCjDfTCV5PLLMnys57MuQOmOx6DXmgQoIy6p31tGxt0hlwW6Fuo4l0YzhkbsJkJXFZalKwym0EYZ/fsBeMwbhhQvuInufMYmyy78dqQZHhx+aRIcQ6lBFZH4rZfPvXIuiDh8jxp1iuSPP5vh8+XZerm6mER8nWdZEXm+/fC4t1baBrYCMZq0uGINDJb0lBWnCtlYqPGSPdHRKoiRjlJja+2lWBUQr1B3qgVqX+OIPJuJPVLES2sjYJy63zEsvH4DPONPZHsr8/Fsplp9KiCjtwtt85bqTPjU028jqszD4JdALivhLV4ojZ0G7bbr1yePU6CvVpoJLpq2ESXOc=",
+  iterations: 250000
+};
+
+/* ===========================================================
+   State
+   =========================================================== */
+let CSV_URL = null;
+let GAS_URL = null;
+let API_PW = null;
+let rows = [];
+let headers = [];
+let editingKey = null; // 編集中のセル ("C-0" 等)
+
+/* ===========================================================
+   Crypto helpers
+   =========================================================== */
+function b64ToBytes(b64) {
+  const bin = atob(b64);
+  const arr = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+  return arr;
+}
+
+async function deriveKey(password, salt, iterations) {
+  const enc = new TextEncoder();
+  const baseKey = await crypto.subtle.importKey(
+    'raw',
+    enc.encode(password),
+    { name: 'PBKDF2' },
+    false,
+    ['deriveKey']
+  );
+  return crypto.subtle.deriveKey(
+    {
+      name: 'PBKDF2',
+      salt: salt,
+      iterations: iterations,
+      hash: 'SHA-256'
+    },
+    baseKey,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['decrypt']
+  );
+}
+
+async function decryptPayload(password) {
+  const salt = b64ToBytes(ENCRYPTED.salt);
+  const iv = b64ToBytes(ENCRYPTED.iv);
+  const data = b64ToBytes(ENCRYPTED.data);
+  const key = await deriveKey(password, salt, ENCRYPTED.iterations);
+  const plain = await crypto.subtle.decrypt(
+    { name: 'AES-GCM', iv: iv },
+    key,
+    data
+  );
+  const text = new TextDecoder().decode(plain);
+  return JSON.parse(text);
+}
+
+/* ===========================================================
+   DOM
+   =========================================================== */
+const $lockScreen = document.getElementById('lockScreen');
+const $app = document.getElementById('app');
+const $pwd = document.getElementById('pwd');
+const $unlockBtn = document.getElementById('unlockBtn');
+const $lockMsg = document.getElementById('lockMsg');
+const $lockOutBtn = document.getElementById('lockOutBtn');
+
+const $q = document.getElementById('q');
+const $searchBtn = document.getElementById('searchBtn');
+const $status = document.getElementById('status');
+const $statusText = document.getElementById('statusText');
+const $count = document.getElementById('count');
+const $resultBody = document.getElementById('resultBody');
+const $refreshBtn = document.getElementById('refreshBtn');
+
+/* ===========================================================
+   Auto-refresh
+   =========================================================== */
+const AUTO_REFRESH_MS = 5 * 60 * 1000; // 5分
+let autoRefreshTimer = null;
+
+function startAutoRefresh() {
+  stopAutoRefresh();
+  autoRefreshTimer = setInterval(() => {
+    if (CSV_URL && !document.hidden) {
+      loadCSV({ silent: true });
+    }
+  }, AUTO_REFRESH_MS);
+}
+
+function stopAutoRefresh() {
+  if (autoRefreshTimer) {
+    clearInterval(autoRefreshTimer);
+    autoRefreshTimer = null;
+  }
+}
+
+// タブが再表示されたら、5分以上経過していれば即座に再読み込み
+let lastLoadTime = 0;
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && CSV_URL) {
+    const now = Date.now();
+    if (now - lastLoadTime > AUTO_REFRESH_MS) {
+      loadCSV({ silent: true });
+    }
+  }
+});
+
+// 手動更新ボタン
+$refreshBtn.addEventListener('click', () => {
+  if (!CSV_URL) return;
+  loadCSV({ manual: true });
+});
+
+/* ===========================================================
+   Unlock flow
+   =========================================================== */
+async function tryUnlock() {
+  const password = $pwd.value;
+  if (!password) {
+    $lockMsg.textContent = 'パスワードを入力してください';
+    return;
+  }
+
+  $unlockBtn.disabled = true;
+  $lockMsg.classList.add('loading');
+  $lockMsg.textContent = '復号中…';
+
+  try {
+    const payload = await decryptPayload(password);
+    if (!payload.csv || !payload.csv.startsWith('http')) throw new Error('Invalid');
+    CSV_URL = payload.csv;
+    GAS_URL = payload.gas;
+    API_PW = payload.apiPw;
+    showApp();
+    loadCSV();
+  } catch (e) {
+    $lockMsg.classList.remove('loading');
+    $lockMsg.textContent = 'パスワードが違います';
+    $pwd.value = '';
+    $pwd.focus();
+  } finally {
+    $unlockBtn.disabled = false;
+  }
+}
+
+function showApp() {
+  $lockScreen.style.display = 'none';
+  $app.style.display = 'block';
+  startAutoRefresh();
+}
+
+function showLock() {
+  stopAutoRefresh();
+  CSV_URL = null;
+  GAS_URL = null;
+  API_PW = null;
+  editingKey = null;
+  rows = [];
+  headers = [];
+  $app.style.display = 'none';
+  $lockScreen.style.display = 'flex';
+  $pwd.value = '';
+  $lockMsg.textContent = '';
+  $lockMsg.classList.remove('loading');
+  $resultBody.innerHTML = '<div class="empty">3桁の数字を入力してください</div>';
+  $count.textContent = '— 件';
+  $q.value = '';
+  $pwd.focus();
+}
+
+$unlockBtn.addEventListener('click', tryUnlock);
+$pwd.addEventListener('keydown', e => {
+  if (e.key === 'Enter') tryUnlock();
+});
+$lockOutBtn.addEventListener('click', showLock);
+
+/* ===========================================================
+   Status helpers
+   =========================================================== */
+function setStatus(text, kind) {
+  $status.className = 'status' + (kind ? ' ' + kind : '');
+  $statusText.textContent = text;
+}
+
+/* ===========================================================
+   CSV parser
+   =========================================================== */
+function parseCSV(text) {
+  const out = [];
+  let row = [];
+  let field = '';
+  let i = 0;
+  let inQuotes = false;
+  while (i < text.length) {
+    const c = text[i];
+    if (inQuotes) {
+      if (c === '"') {
+        if (text[i + 1] === '"') { field += '"'; i += 2; continue; }
+        inQuotes = false; i++; continue;
+      }
+      field += c; i++; continue;
+    } else {
+      if (c === '"') { inQuotes = true; i++; continue; }
+      if (c === ',') { row.push(field); field = ''; i++; continue; }
+      if (c === '\r') { i++; continue; }
+      if (c === '\n') { row.push(field); out.push(row); row = []; field = ''; i++; continue; }
+      field += c; i++; continue;
+    }
+  }
+  if (field !== '' || row.length > 0) { row.push(field); out.push(row); }
+  return out;
+}
+
+/* ===========================================================
+   Load CSV
+   =========================================================== */
+async function loadCSV(opts = {}) {
+  const { silent = false, manual = false } = opts;
+  if (!CSV_URL) return;
+
+  if (manual) {
+    $refreshBtn.classList.add('spinning');
+    $refreshBtn.disabled = true;
+  }
+  if (!silent) setStatus('データを読み込み中…');
+
+  try {
+    // キャッシュバスター: URLに現在時刻を付ける
+    const sep = CSV_URL.includes('?') ? '&' : '?';
+    const bustUrl = CSV_URL + sep + '_t=' + Date.now();
+    const res = await fetch(bustUrl, { cache: 'no-store' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const text = await res.text();
+    const parsed = parseCSV(text).filter(r => r.some(c => c !== ''));
+    if (parsed.length === 0) throw new Error('空のCSV');
+    headers = parsed[0];
+    rows = parsed.slice(1);
+    lastLoadTime = Date.now();
+    const timeStr = new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
+    setStatus(`${rows.length} 行 / 最終更新 ${timeStr}`, 'ok');
+
+    // 検索結果が表示されていれば再検索 (データ更新を反映)
+    if ($q.value.length === 3) doSearch();
+  } catch (e) {
+    console.error(e);
+    if (!silent) setStatus('読み込みに失敗しました: ' + e.message, 'err');
+  } finally {
+    if (manual) {
+      // 最低0.5秒は回転を見せる (体感のため)
+      setTimeout(() => {
+        $refreshBtn.classList.remove('spinning');
+        $refreshBtn.disabled = false;
+      }, 500);
+    }
+  }
+}
+
+/* ===========================================================
+   Search
+   =========================================================== */
+function search(query) {
+  const q = String(query).trim();
+  if (!/^\d{3}$/.test(q)) {
+    return { error: '3桁の数字を入力してください' };
+  }
+  if (rows.length === 0) {
+    return { error: 'データが未読み込みです' };
+  }
+  const matches = rows.filter(r => {
+    const bRaw = (r[1] ?? '').toString().trim();
+    if (bRaw.length < 3) return false;
+    return bRaw.slice(-3) === q;
+  });
+  return { matches };
+}
+
+function render(result, query) {
+  if (result.error) {
+    $resultBody.innerHTML = `<div class="empty">${escapeHTML(result.error)}</div>`;
+    $count.textContent = '— 件';
+    return;
+  }
+  const matches = result.matches;
+  $count.textContent = `${matches.length} 件`;
+  if (matches.length === 0) {
+    $resultBody.innerHTML = `<div class="empty">「${escapeHTML(query)}」に一致する行はありません</div>`;
+    return;
+  }
+
+  // 検索結果として保持しておく (編集時に参照)
+  currentMatches = matches.slice();
+  editingKey = null;
+
+  // 編集可能セルの生成 (C列, E列)
+  function editableCell(col, idx, val, opts) {
+    const { rows = 1, isE = false } = opts || {};
+    const valueClass = isE ? 'rc-value rc-e-value' : 'rc-value rc-c-value';
+    const wrapClass = isE ? 'rc-e-wrap' : 'rc-c-wrap';
+    const editClass = isE ? 'rc-e-edit' : 'rc-c-edit';
+    return `
+      <div class="${wrapClass}" data-cell="${col}-${idx}">
+        <div class="rc-edit-header">
+          <span class="rc-label">${col}</span>
+          <button class="edit-btn" data-action="edit" data-idx="${idx}" data-col="${col}">✎</button>
+        </div>
+        <div class="${valueClass}" data-display="${col}-${idx}">${escapeHTML(val)}</div>
+        <div class="${editClass}" data-edit="${col}-${idx}" style="display:none">
+          <textarea class="cell-textarea" data-textarea="${col}-${idx}" rows="${rows}"></textarea>
+          <div class="cell-actions">
+            <button class="btn-save" data-action="save" data-idx="${idx}" data-col="${col}">💾 保存</button>
+            <button class="btn-cancel" data-action="cancel" data-idx="${idx}" data-col="${col}">キャンセル</button>
+          </div>
+          <div class="cell-msg" data-msg="${col}-${idx}"></div>
+        </div>
+      </div>`;
+  }
+
+  const cards = matches.map((r, idx) => {
+    const bVal = (r[1] ?? '').toString();
+    const cVal = (r[2] ?? '').toString();
+    const dVal = (r[3] ?? '').toString();
+    const eVal = (r[4] ?? '').toString();
+    return `
+      <div class="result-card" data-idx="${idx}">
+        <div class="rc-left">
+          <div class="rc-cell"><span class="rc-label">B</span><span class="rc-value">${highlightLast3(bVal)}</span></div>
+          ${editableCell('C', idx, cVal, { rows: 1 })}
+          <div class="rc-cell"><span class="rc-label">D</span><span class="rc-value">${escapeHTML(dVal)}</span></div>
+        </div>
+        <div class="rc-right">
+          ${editableCell('E', idx, eVal, { rows: 4, isE: true })}
+        </div>
+      </div>`;
+  }).join('');
+
+  $resultBody.innerHTML = `<div class="result-cards">${cards}</div>`;
+
+  // ボタンのイベント登録 (iOS Brave対応: click と touchend 両方)
+  $resultBody.querySelectorAll('[data-action]').forEach(btn => {
+    let touchHandled = false;
+    btn.addEventListener('touchend', (e) => {
+      touchHandled = true;
+      e.preventDefault();
+      onCardAction({ currentTarget: btn });
+      setTimeout(() => { touchHandled = false; }, 500);
+    }, { passive: false });
+    btn.addEventListener('click', (e) => {
+      if (touchHandled) return;
+      onCardAction({ currentTarget: btn });
+    });
+  });
+}
+
+let currentMatches = []; // 現在表示中の検索結果
+
+// 列名 → currentMatches配列インデックス
+const COL_TO_IDX = { 'C': 2, 'D': 3, 'E': 4 };
+
+/* ===========================================================
+   Edit flow (C列/E列共通)
+   =========================================================== */
+function onCardAction(e) {
+  const action = e.currentTarget.dataset.action;
+  const idx = Number(e.currentTarget.dataset.idx);
+  const col = e.currentTarget.dataset.col;
+  dlog(`onCardAction: ${action} idx=${idx} col=${col}`);
+
+  if (action === 'edit') enterEditMode(idx, col);
+  else if (action === 'cancel') exitEditMode(idx, col);
+  else if (action === 'save') saveEdit(idx, col);
+}
+
+function editKey(idx, col) { return col + '-' + idx; }
+
+function enterEditMode(idx, col) {
+  // 他で編集中なら閉じる
+  if (editingKey !== null && editingKey !== editKey(idx, col)) {
+    const [otherCol, otherIdx] = editingKey.split('-');
+    exitEditMode(Number(otherIdx), otherCol);
+  }
+  editingKey = editKey(idx, col);
+
+  const colIdx = COL_TO_IDX[col];
+  const val = (currentMatches[idx][colIdx] ?? '').toString();
+  const $display = $resultBody.querySelector(`[data-display="${col}-${idx}"]`);
+  const $edit = $resultBody.querySelector(`[data-edit="${col}-${idx}"]`);
+  const $textarea = $resultBody.querySelector(`[data-textarea="${col}-${idx}"]`);
+  const $editBtn = $resultBody.querySelector(`[data-action="edit"][data-idx="${idx}"][data-col="${col}"]`);
+
+  $textarea.value = val;
+  $textarea.dataset.currentValue = val;
+  $textarea.addEventListener('input', () => {
+    $textarea.dataset.currentValue = $textarea.value;
+  });
+
+  $display.style.display = 'none';
+  $edit.style.display = 'block';
+  $editBtn.style.display = 'none';
+  $textarea.focus();
+  $textarea.setSelectionRange(val.length, val.length);
+}
+
+function exitEditMode(idx, col) {
+  editingKey = null;
+  const $display = $resultBody.querySelector(`[data-display="${col}-${idx}"]`);
+  const $edit = $resultBody.querySelector(`[data-edit="${col}-${idx}"]`);
+  const $editBtn = $resultBody.querySelector(`[data-action="edit"][data-idx="${idx}"][data-col="${col}"]`);
+  const $msg = $resultBody.querySelector(`[data-msg="${col}-${idx}"]`);
+  if (!$display) return;
+  $display.style.display = '';
+  $edit.style.display = 'none';
+  $editBtn.style.display = '';
+  $msg.textContent = '';
+  $msg.className = 'cell-msg';
+}
+
+/* ===========================================================
+   Custom confirm dialog (iOS Brave対応)
+   =========================================================== */
+function customConfirm(message, oldValue, newValue) {
+  return new Promise(resolve => {
+    const $modal = document.getElementById('confirmModal');
+    const $msg = document.getElementById('confirmMessage');
+    const $old = document.getElementById('confirmOld');
+    const $new = document.getElementById('confirmNew');
+    const $ok = document.getElementById('confirmOk');
+    const $cancel = document.getElementById('confirmCancel');
+
+    $msg.textContent = message;
+    $old.textContent = oldValue || '(空)';
+    $new.textContent = newValue || '(空)';
+    $modal.classList.add('active');
+
+    let touchHandled = false;
+
+    function cleanup() {
+      $modal.classList.remove('active');
+      $ok.removeEventListener('click', okClick);
+      $cancel.removeEventListener('click', cancelClick);
+      $ok.removeEventListener('touchend', okTouch);
+      $cancel.removeEventListener('touchend', cancelTouch);
+    }
+    function okClick() { if (touchHandled) return; cleanup(); resolve(true); }
+    function cancelClick() { if (touchHandled) return; cleanup(); resolve(false); }
+    function okTouch(e) { e.preventDefault(); touchHandled = true; cleanup(); resolve(true); }
+    function cancelTouch(e) { e.preventDefault(); touchHandled = true; cleanup(); resolve(false); }
+
+    $ok.addEventListener('click', okClick);
+    $cancel.addEventListener('click', cancelClick);
+    $ok.addEventListener('touchend', okTouch, { passive: false });
+    $cancel.addEventListener('touchend', cancelTouch, { passive: false });
+  });
+}
+
+async function saveEdit(idx, col) {
+  dlog(`saveEdit start, idx=${idx} col=${col}`);
+  const colIdx = COL_TO_IDX[col];
+  const $textarea = $resultBody.querySelector(`[data-textarea="${col}-${idx}"]`);
+  const $msg = $resultBody.querySelector(`[data-msg="${col}-${idx}"]`);
+  const $saveBtn = $resultBody.querySelector(`[data-action="save"][data-idx="${idx}"][data-col="${col}"]`);
+  const $cancelBtn = $resultBody.querySelector(`[data-action="cancel"][data-idx="${idx}"][data-col="${col}"]`);
+
+  // iOS対策: textareaのフォーカスを外して値を確定
+  $textarea.blur();
+  await new Promise(r => setTimeout(r, 50));
+
+  const valFromValue = $textarea.value;
+  const valFromData = $textarea.dataset.currentValue ?? '';
+  const newVal = valFromValue.length >= valFromData.length ? valFromValue : valFromData;
+  dlog(`value=${valFromValue.length}, data=${valFromData.length}, using=${newVal.length}`);
+
+  const oldVal = (currentMatches[idx][colIdx] ?? '').toString();
+  const bVal = (currentMatches[idx][1] ?? '').toString();
+  dlog(`oldVal.length=${oldVal.length}, newVal.length=${newVal.length}, bVal=${bVal}`);
+
+  if (newVal === oldVal) {
+    dlog('no change, exiting');
+    exitEditMode(idx, col);
+    return;
+  }
+
+  dlog('showing confirm dialog');
+  const confirmed = await customConfirm(
+    `B列「${bVal}」の${col}列を以下の内容で保存しますか？`,
+    oldVal,
+    newVal
+  );
+  dlog(`confirm result: ${confirmed}`);
+  if (!confirmed) return;
+
+  if (!GAS_URL) {
+    dlog('GAS_URL missing', 'err');
+    $msg.textContent = '保存先APIが設定されていません';
+    $msg.className = 'cell-msg err';
+    return;
+  }
+
+  $saveBtn.disabled = true;
+  $cancelBtn.disabled = true;
+  $msg.textContent = '保存中…';
+  $msg.className = 'cell-msg loading';
+
+  try {
+    dlog('sending POST...');
+    const res = await fetch(GAS_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({
+        password: API_PW,
+        action: 'updateCell',
+        bValue: bVal,
+        column: col,
+        newValue: newVal
+      }),
+      redirect: 'follow'
+    });
+    dlog(`response status: ${res.status}`);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const rawText = await res.text();
+    dlog(`response body: ${rawText.substring(0, 200)}`);
+    const json = JSON.parse(rawText);
+    if (!json.ok) throw new Error(json.error || 'unknown error');
+
+    // ローカルデータも更新
+    currentMatches[idx][colIdx] = newVal;
+    for (let i = 0; i < rows.length; i++) {
+      if (String(rows[i][1] ?? '').trim() === String(bVal).trim()) {
+        rows[i][colIdx] = newVal;
+        break;
+      }
+    }
+
+    // 表示を更新
+    const $display = $resultBody.querySelector(`[data-display="${col}-${idx}"]`);
+    $display.innerHTML = escapeHTML(newVal);
+    $msg.textContent = '✓ 保存しました';
+    $msg.className = 'cell-msg ok';
+    dlog('save success');
+    setTimeout(() => exitEditMode(idx, col), 1200);
+  } catch (e) {
+    dlog('save FAILED: ' + e.message, 'err');
+    console.error(e);
+    $msg.textContent = '保存失敗: ' + e.message;
+    $msg.className = 'cell-msg err';
+    $saveBtn.disabled = false;
+    $cancelBtn.disabled = false;
+  }
+}
+
+function highlightLast3(val) {
+  const safe = escapeHTML(val);
+  if (val.length < 3) return safe;
+  const head = escapeHTML(val.slice(0, -3));
+  const tail = escapeHTML(val.slice(-3));
+  return `${head}<span class="match">${tail}</span>`;
+}
+
+function escapeHTML(s) {
+  return String(s).replace(/[&<>"']/g, c => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[c]));
+}
+
+function doSearch() {
+  render(search($q.value.trim()), $q.value.trim());
+}
+
+$searchBtn.addEventListener('click', doSearch);
+$q.addEventListener('keydown', e => {
+  if (e.key === 'Enter') doSearch();
+});
+$q.addEventListener('input', () => {
+  $q.value = $q.value.replace(/\D/g, '').slice(0, 3);
+  if ($q.value.length === 3 && rows.length > 0) doSearch();
+});
+</script>
+</body>
+</html>
