@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 <!--
   ============================================================
-  リスト検索ツール — v1.4
+  リスト検索ツール — v1.4.1
   ============================================================
-  Released: 2026-05-18
+  Released: 2026-05-22
   Source:   Google Sheets "リスト20251116"
 
   Features:
@@ -12,10 +12,19 @@
     ✓ 5分間隔の自動更新 + 手動更新ボタン
     ✓ カードレイアウト表示
     ✓ レスポンシブ対応 (PC/スマホ)
-    ✓ E列の編集機能 (GAS Webアプリ経由)
+    ✓ C列・E列の編集機能 (GAS Webアプリ経由)
     ✓ iOS Brave対応 (カスタムダイアログ・touchend)
+    ✓ ヘッダー右上に入力フォーム (Googleフォーム) リンク
 
-  Changes from v1.2:
+  Changes in v1.4.1:
+    ✓ <meta name="robots" content="noindex, nofollow"> を追加
+      (検索エンジンへのインデックス除外)
+
+  Changes in v1.4:
+    ✓ ヘッダー右上に「📝 入力フォーム」リンクを追加
+      (Googleフォームへ別タブで遷移)
+
+  Changes in v1.3:
     ✓ C列も編集可能に (列を限定したい場合はGAS側 COLUMN_MAP で制御)
     ✓ 汎用化: 編集ロジックを列名パラメータ化
   ============================================================
@@ -909,7 +918,7 @@
     <input id="pwd" type="password" autocomplete="off" placeholder="••••••••" autofocus />
     <button id="unlockBtn" type="button">UNLOCK</button>
     <div id="lockMsg" class="lock-msg"></div>
-    <div class="version-tag">v1.4</div>
+    <div class="version-tag">v1.4.1</div>
   </div>
 </div>
 
@@ -918,7 +927,7 @@
 
   <header>
     <div class="title-block">
-      <div class="eyebrow">List Lookup / 下3桁検索 <span class="version-inline">v1.4</span></div>
+      <div class="eyebrow">List Lookup / 下3桁検索 <span class="version-inline">v1.4.1</span></div>
       <h1 class="main-title">リスト<em>20251116</em></h1>
     </div>
     <div class="meta">
