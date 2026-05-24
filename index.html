@@ -440,6 +440,16 @@
     line-height: 1.6;
   }
 
+  .nep-select {
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23999' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 14px center;
+    padding-right: 36px;
+    cursor: pointer;
+  }
+
   .nep-msg {
     font-family: 'JetBrains Mono', monospace;
     font-size: 12px;
@@ -1195,7 +1205,26 @@
       </div>
       <div class="nep-row">
         <label class="nep-label" for="nep-d">担当</label>
-        <input class="nep-input" id="nep-d" type="text" placeholder="例: 山田" autocomplete="off" maxlength="50" />
+        <select class="nep-input nep-select" id="nep-d">
+          <option value="">— 選択してください —</option>
+          <option>ヨシナカ</option>
+          <option>詩子</option>
+          <option>志村</option>
+          <option>はらだ</option>
+          <option>ミネ</option>
+          <option>みその</option>
+          <option>キリ</option>
+          <option>もり</option>
+          <option>かじ</option>
+          <option>小笠原</option>
+          <option>近藤</option>
+          <option>川本</option>
+          <option>たくや</option>
+          <option>ミコ</option>
+          <option>やまがた</option>
+          <option>指名なし</option>
+          <option>ペアリスト</option>
+        </select>
       </div>
       <div class="nep-row">
         <label class="nep-label" for="nep-e">メモ</label>
