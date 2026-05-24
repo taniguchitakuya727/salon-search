@@ -292,6 +292,33 @@
     color: var(--accent);
   }
 
+  /* ---------- Search mode tag ---------- */
+  .search-mode-tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    padding: 4px 10px;
+    border-radius: 2px;
+    display: inline-block;
+    margin-bottom: 4px;
+  }
+  .search-mode-tag.mode-num {
+    background: var(--accent-soft);
+    color: var(--accent);
+  }
+  .search-mode-tag.mode-name {
+    background: rgba(30, 120, 60, 0.10);
+    color: #1a6b35;
+  }
+
+  /* 名前ヒット時のC列ハイライト */
+  .match-name {
+    background: rgba(30, 120, 60, 0.15);
+    padding: 1px 3px;
+    border-radius: 2px;
+  }
+
   /* ---------- Search box ---------- */
   .search {
     background: var(--paper-2);
@@ -335,7 +362,15 @@
     letter-spacing: 0.2em;
     text-align: center;
     outline: none;
-    transition: border-color 0.15s, background 0.15s;
+    transition: border-color 0.15s, background 0.15s, font-size 0.1s;
+  }
+
+  /* 名前入力モード: フォントを小さく、左寄せに */
+  #q.mode-name {
+    font-family: 'Noto Sans JP', sans-serif;
+    font-size: 22px;
+    letter-spacing: 0.05em;
+    text-align: left;
   }
 
   #q:focus {
@@ -941,12 +976,13 @@
 
   <div class="search">
     <label for="q">
-      <span>3-digit input</span>
+      <span id="qHint">3-digit / name</span>
       検索
     </label>
-    <input id="q" type="text" inputmode="numeric" pattern="\d{3}" maxlength="3" placeholder="000" autocomplete="off" />
+    <input id="q" type="text" inputmode="text" maxlength="40" placeholder="000 または 顧客名" autocomplete="off" />
     <button id="searchBtn" type="button">検索</button>
   </div>
+  <div id="searchModeTag" class="search-mode-tag" style="display:none"></div>
 
   <div class="status-row">
     <div id="status" class="status">
@@ -1305,52 +1341,127 @@ async function loadCSV(opts = {}) {
 /* ===========================================================
    Search
    =========================================================== */
+/* ===========================================================
+   文字列ユーティリティ (カナ変換・正規化)
+   =========================================================== */
+
+// ひらがな → カタカナ
+function toKatakana(str) {
+  return str.replace(/[\u3041-\u3096]/g, c =>
+    String.fromCharCode(c.charCodeAt(0) + 0x60));
+}
+// カタカナ → ひらがな
+function toHiragana(str) {
+  return str.replace(/[\u30A1-\u30F6]/g, c =>
+    String.fromCharCode(c.charCodeAt(0) - 0x60));
+}
+// 検索用の正規化: 全角英数→半角・大文字化・カタカナに統一
+function normalize(str) {
+  return str
+    .replace(/[Ａ-Ｚａ-ｚ０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0))
+    .toUpperCase()
+    .replace(/\s+/g, '')
+    .split('').map(toKatakana).join('');
+}
+
+// クエリがどのモードか判定
+function detectMode(q) {
+  if (/^\d{1,3}$/.test(q)) return 'num';
+  return 'name';
+}
+
+/* ===========================================================
+   Search
+   =========================================================== */
 function search(query) {
   const q = String(query).trim();
-  if (!/^\d{3}$/.test(q)) {
-    return { error: '3桁の数字を入力してください' };
+  if (q === '') return { error: '番号(3桁)または顧客名を入力してください' };
+  if (rows.length === 0) return { error: 'データが未読み込みです' };
+
+  const mode = detectMode(q);
+
+  if (mode === 'num') {
+    // 番号下3桁マッチ (従来通り)
+    if (q.length !== 3) return { error: '番号は3桁で入力してください', mode };
+    const matches = rows.filter(r => {
+      const bRaw = (r[1] ?? '').toString().trim();
+      return bRaw.length >= 3 && bRaw.slice(-3) === q;
+    });
+    return { matches, mode };
   }
-  if (rows.length === 0) {
-    return { error: 'データが未読み込みです' };
-  }
+
+  // 名前検索: C列を正規化して部分一致
+  const nq = normalize(q);
+  if (nq.length < 1) return { error: '検索文字を入力してください', mode };
   const matches = rows.filter(r => {
-    const bRaw = (r[1] ?? '').toString().trim();
-    if (bRaw.length < 3) return false;
-    return bRaw.slice(-3) === q;
+    const cRaw = (r[2] ?? '').toString();
+    return normalize(cRaw).includes(nq);
   });
-  return { matches };
+  return { matches, mode, nameQuery: nq };
+}
+
+function highlightName(val, nq) {
+  // 正規化後の位置を元の文字列に近似マッピングしてハイライト
+  // シンプル実装: ひらがな/カタカナ両方で試してspanを挿入
+  const safe = escapeHTML(val);
+  // val を正規化して一致位置を探す
+  const nVal = normalize(val);
+  const pos = nVal.indexOf(nq);
+  if (pos < 0) return safe;
+  // 元の文字列で同じ文字数分をハイライト (正規化で文字数は変わらない前提)
+  const before = escapeHTML(val.slice(0, pos));
+  const hit    = escapeHTML(val.slice(pos, pos + nq.length));
+  const after  = escapeHTML(val.slice(pos + nq.length));
+  return `${before}<span class="match-name">${hit}</span>${after}`;
 }
 
 function render(result, query) {
+  const $modeTag = document.getElementById('searchModeTag');
+
   if (result.error) {
     $resultBody.innerHTML = `<div class="empty">${escapeHTML(result.error)}</div>`;
     $count.textContent = '— 件';
+    $modeTag.style.display = 'none';
     return;
   }
-  const matches = result.matches;
+
+  const { matches, mode, nameQuery } = result;
+
+  // モードタグ表示
+  $modeTag.style.display = 'inline-block';
+  if (mode === 'num') {
+    $modeTag.className = 'search-mode-tag mode-num';
+    $modeTag.textContent = '番号検索 — 下3桁マッチ';
+  } else {
+    $modeTag.className = 'search-mode-tag mode-name';
+    $modeTag.textContent = '顧客名検索 — 部分一致';
+  }
+
   $count.textContent = `${matches.length} 件`;
   if (matches.length === 0) {
     $resultBody.innerHTML = `<div class="empty">「${escapeHTML(query)}」に一致する行はありません</div>`;
     return;
   }
 
-  // 検索結果として保持しておく (編集時に参照)
   currentMatches = matches.slice();
   editingKey = null;
 
-  // 編集可能セルの生成 (C列, E列)
   function editableCell(col, idx, val, opts) {
     const { rows = 1, isE = false } = opts || {};
     const valueClass = isE ? 'rc-value rc-e-value' : 'rc-value rc-c-value';
     const wrapClass = isE ? 'rc-e-wrap' : 'rc-c-wrap';
     const editClass = isE ? 'rc-e-edit' : 'rc-c-edit';
+    // 名前検索時はC列をハイライト
+    const displayVal = (col === 'C' && mode === 'name' && nameQuery)
+      ? highlightName(val, nameQuery)
+      : escapeHTML(val);
     return `
       <div class="${wrapClass}" data-cell="${col}-${idx}">
         <div class="rc-edit-header">
           <span class="rc-label">${col}</span>
           <button class="edit-btn" data-action="edit" data-idx="${idx}" data-col="${col}">✎</button>
         </div>
-        <div class="${valueClass}" data-display="${col}-${idx}">${escapeHTML(val)}</div>
+        <div class="${valueClass}" data-display="${col}-${idx}">${displayVal}</div>
         <div class="${editClass}" data-edit="${col}-${idx}" style="display:none">
           <textarea class="cell-textarea" data-textarea="${col}-${idx}" rows="${rows}"></textarea>
           <div class="cell-actions">
@@ -1382,7 +1493,6 @@ function render(result, query) {
 
   $resultBody.innerHTML = `<div class="result-cards">${cards}</div>`;
 
-  // ボタンのイベント登録 (iOS Brave対応: click と touchend 両方)
   $resultBody.querySelectorAll('[data-action]').forEach(btn => {
     let touchHandled = false;
     btn.addEventListener('touchend', (e) => {
@@ -1609,16 +1719,34 @@ function escapeHTML(s) {
 }
 
 function doSearch() {
-  render(search($q.value.trim()), $q.value.trim());
+  const q = $q.value.trim();
+  render(search(q), q);
 }
+
+const $searchModeTag = document.getElementById('searchModeTag');
 
 $searchBtn.addEventListener('click', doSearch);
 $q.addEventListener('keydown', e => {
   if (e.key === 'Enter') doSearch();
 });
 $q.addEventListener('input', () => {
-  $q.value = $q.value.replace(/\D/g, '').slice(0, 3);
-  if ($q.value.length === 3 && rows.length > 0) doSearch();
+  const val = $q.value;
+  const mode = detectMode(val.trim());
+
+  // モードに応じてinputのスタイルを切り替え
+  if (mode === 'num') {
+    $q.classList.remove('mode-name');
+    $q.classList.add('mode-num');
+    // 番号モード: 数字のみ・3文字に制限
+    const cleaned = val.replace(/\D/g, '').slice(0, 3);
+    if (val !== cleaned) $q.value = cleaned;
+    if (cleaned.length === 3 && rows.length > 0) doSearch();
+  } else {
+    $q.classList.remove('mode-num');
+    $q.classList.add('mode-name');
+    // 名前モード: 制限なし、2文字以上で自動検索
+    if (val.trim().length >= 2 && rows.length > 0) doSearch();
+  }
 });
 </script>
 </body>
