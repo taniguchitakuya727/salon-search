@@ -1773,7 +1773,7 @@ async function submitNewEntry() {
   try {
     const res = await fetch(GAS_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify({
         password: API_PW,
         action: 'appendRow',
@@ -1783,9 +1783,13 @@ async function submitNewEntry() {
         dValue: $nepD.value.trim(),
         eValue: $nepE.value.trim(),
       }),
+      redirect: 'follow',
     });
-    const json = await res.json();
-    dlog(`appendRow response: ${JSON.stringify(json)}`);
+    dlog(`appendRow status: ${res.status}`);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const rawText = await res.text();
+    dlog(`appendRow response: ${rawText.substring(0, 200)}`);
+    const json = JSON.parse(rawText);
     if (json.ok) {
       nepSetMsg('✅ 登録しました', 'ok');
       // データを再取得して検索欄に会員番号をセット
