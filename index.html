@@ -1,13 +1,14 @@
 <!DOCTYPE html>
 <!--
   ============================================================
-  リスト検索ツール — v1.4.1
+  リスト検索ツール — v1.6
   ============================================================
-  Released: 2026-05-22
+  Released: 2026-05-24
   Source:   Google Sheets "リスト20251116"
 
   Features:
     ✓ B列下3桁マッチ検索 → B/C/D/E列表示
+    ✓ 顧客名(C列)での部分一致検索 (ひらがな/カタカナ相互変換対応)
     ✓ パスワード保護 (AES-256-GCM / PBKDF2-SHA256 250k)
     ✓ 5分間隔の自動更新 + 手動更新ボタン
     ✓ カードレイアウト表示
@@ -15,17 +16,30 @@
     ✓ C列・E列の編集機能 (GAS Webアプリ経由)
     ✓ iOS Brave対応 (カスタムダイアログ・touchend)
     ✓ ヘッダー右上に入力フォーム (Googleフォーム) リンク
+    ✓ noindex, nofollow (検索エンジン除外)
+
+  Changes in v1.6:
+    ✓ E列編集モードに「📅 今日」日付スタンプ挿入ボタンを追加
+      - カーソル位置に [YYYY/MM/DD] を挿入
+      - 行頭でなければ自動改行を前置
+      - iOS Brave対応 (touchend + click)
+
+  Changes in v1.5:
+    ✓ 顧客名(C列)での部分一致検索を追加
+      - 数字3桁 → 番号検索 / それ以外 → 名前検索 を自動判別
+      - ひらがな/カタカナ相互変換・全角半角統一
+      - 2文字以上で自動検索
+      - ヒット箇所をグリーンでハイライト表示
+      - 検索モードタグ(番号検索/顧客名検索)を結果上部に表示
 
   Changes in v1.4.1:
     ✓ <meta name="robots" content="noindex, nofollow"> を追加
-      (検索エンジンへのインデックス除外)
 
   Changes in v1.4:
     ✓ ヘッダー右上に「📝 入力フォーム」リンクを追加
-      (Googleフォームへ別タブで遷移)
 
   Changes in v1.3:
-    ✓ C列も編集可能に (列を限定したい場合はGAS側 COLUMN_MAP で制御)
+    ✓ C列も編集可能に
     ✓ 汎用化: 編集ロジックを列名パラメータ化
   ============================================================
 -->
@@ -671,6 +685,35 @@
     margin-top: 10px;
   }
 
+  /* ---------- Date stamp bar (E列編集時) ---------- */
+  .stamp-bar {
+    margin-bottom: 8px;
+  }
+
+  .btn-stamp {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    padding: 6px 14px;
+    border-radius: 2px;
+    cursor: pointer;
+    border: 1px solid var(--line);
+    background: var(--paper);
+    color: var(--ink);
+    transition: background 0.12s, border-color 0.12s;
+  }
+
+  .btn-stamp:hover {
+    border-color: #1a6b35;
+    color: #1a6b35;
+    background: rgba(30, 120, 60, 0.07);
+  }
+
+  .btn-stamp:active {
+    transform: translateY(1px);
+  }
+
   /* C列の編集はコンパクトに */
   .rc-c-wrap .cell-actions {
     margin-top: 6px;
@@ -953,7 +996,7 @@
     <input id="pwd" type="password" autocomplete="off" placeholder="••••••••" autofocus />
     <button id="unlockBtn" type="button">UNLOCK</button>
     <div id="lockMsg" class="lock-msg"></div>
-    <div class="version-tag">v1.4.1</div>
+    <div class="version-tag">v1.6</div>
   </div>
 </div>
 
@@ -962,7 +1005,7 @@
 
   <header>
     <div class="title-block">
-      <div class="eyebrow">List Lookup / 下3桁検索 <span class="version-inline">v1.4.1</span></div>
+      <div class="eyebrow">List Lookup / 下3桁・顧客名検索 <span class="version-inline">v1.6</span></div>
       <h1 class="main-title">リスト<em>20251116</em></h1>
     </div>
     <div class="meta">
@@ -1463,6 +1506,7 @@ function render(result, query) {
         </div>
         <div class="${valueClass}" data-display="${col}-${idx}">${displayVal}</div>
         <div class="${editClass}" data-edit="${col}-${idx}" style="display:none">
+          ${isE ? `<div class="stamp-bar"><button class="btn-stamp" data-action="stamp" data-idx="${idx}" data-col="${col}">📅 今日</button></div>` : ''}
           <textarea class="cell-textarea" data-textarea="${col}-${idx}" rows="${rows}"></textarea>
           <div class="cell-actions">
             <button class="btn-save" data-action="save" data-idx="${idx}" data-col="${col}">💾 保存</button>
@@ -1525,6 +1569,7 @@ function onCardAction(e) {
   if (action === 'edit') enterEditMode(idx, col);
   else if (action === 'cancel') exitEditMode(idx, col);
   else if (action === 'save') saveEdit(idx, col);
+  else if (action === 'stamp') insertDateStamp(idx, col);
 }
 
 function editKey(idx, col) { return col + '-' + idx; }
@@ -1569,6 +1614,38 @@ function exitEditMode(idx, col) {
   $editBtn.style.display = '';
   $msg.textContent = '';
   $msg.className = 'cell-msg';
+}
+
+/* ===========================================================
+   Date stamp insertion (E列専用)
+   =========================================================== */
+function insertDateStamp(idx, col) {
+  const $textarea = $resultBody.querySelector(`[data-textarea="${col}-${idx}"]`);
+  if (!$textarea) return;
+
+  // 今日の日付を [YYYY/MM/DD] 形式で生成
+  const now = new Date();
+  const stamp = `[${now.getFullYear()}/${String(now.getMonth()+1).padStart(2,'0')}/${String(now.getDate()).padStart(2,'0')}] `;
+
+  // カーソル位置に挿入 (iOS対応: execCommand fallback)
+  const start = $textarea.selectionStart ?? $textarea.value.length;
+  const end   = $textarea.selectionEnd   ?? start;
+  const before = $textarea.value.slice(0, start);
+  const after  = $textarea.value.slice(end);
+
+  // 行頭でなければ改行を前に挟む
+  const needsNewline = before.length > 0 && !before.endsWith('\n');
+  const insert = (needsNewline ? '\n' : '') + stamp;
+
+  $textarea.value = before + insert + after;
+  $textarea.dataset.currentValue = $textarea.value;
+
+  // カーソルをスタンプの直後に移動
+  const newPos = start + insert.length;
+  $textarea.setSelectionRange(newPos, newPos);
+  $textarea.focus();
+
+  dlog(`stamp inserted at pos=${start}: "${stamp}"`);
 }
 
 /* ===========================================================
