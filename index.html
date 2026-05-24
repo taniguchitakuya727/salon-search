@@ -434,6 +434,13 @@
   .nep-input:focus { border-color: var(--accent); background: #fff; }
   .nep-input.error { border-color: var(--err); }
 
+  .nep-memo-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    width: 100%;
+  }
+
   .nep-textarea {
     resize: vertical;
     min-height: 72px;
@@ -1371,7 +1378,10 @@
       </div>
       <div class="nep-row">
         <label class="nep-label" for="nep-e">メモ</label>
-        <textarea class="nep-input nep-textarea" id="nep-e" rows="3" placeholder="自由記入"></textarea>
+        <div class="nep-memo-wrap">
+          <div class="stamp-bar"><button class="btn-stamp" id="nepStampBtn" type="button">📅 今日</button></div>
+          <textarea class="nep-input nep-textarea" id="nep-e" rows="3" placeholder="自由記入"></textarea>
+        </div>
       </div>
       <div id="nepMsg" class="nep-msg"></div>
       <div class="nep-actions">
@@ -1769,7 +1779,6 @@ async function submitNewEntry() {
   $nepSubmitBtn.disabled = true;
   nepSetMsg('登録中…', '');
   dlog(`appendRow: B=${bVal} C=${cVal} D=${$nepD.value.trim()} E=${$nepE.value.trim()}`);
-  dlog(`GAS_URL: ${GAS_URL ? GAS_URL.substring(0, 60) + '...' : 'NULL'}`);
 
   try {
     const res = await fetch(GAS_URL, {
@@ -1847,6 +1856,24 @@ addTouchClick($newEntryBtn,   openNewEntryPanel);
 addTouchClick($newEntryClose, closeNewEntryPanel);
 addTouchClick($nepCancelBtn,  closeNewEntryPanel);
 addTouchClick($nepSubmitBtn,  submitNewEntry);
+
+// 新規登録パネルのメモ欄「今日」ボタン
+const $nepStampBtn = document.getElementById('nepStampBtn');
+addTouchClick($nepStampBtn, () => {
+  const now = new Date();
+  const pad = n => String(n).padStart(2, '0');
+  const stamp = `[${now.getFullYear()}/${pad(now.getMonth()+1)}/${pad(now.getDate())}] `;
+  const start = $nepE.selectionStart ?? $nepE.value.length;
+  const end   = $nepE.selectionEnd   ?? start;
+  const before = $nepE.value.slice(0, start);
+  const after  = $nepE.value.slice(end);
+  const needsNewline = before.length > 0 && !before.endsWith('\n');
+  const insert = (needsNewline ? '\n' : '') + stamp;
+  $nepE.value = before + insert + after;
+  const newPos = start + insert.length;
+  $nepE.setSelectionRange(newPos, newPos);
+  $nepE.focus();
+});
 
 /* ===========================================================
    使い方モーダル
