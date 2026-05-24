@@ -1769,6 +1769,7 @@ async function submitNewEntry() {
   $nepSubmitBtn.disabled = true;
   nepSetMsg('登録中…', '');
   dlog(`appendRow: B=${bVal} C=${cVal} D=${$nepD.value.trim()} E=${$nepE.value.trim()}`);
+  dlog(`GAS_URL: ${GAS_URL ? GAS_URL.substring(0, 60) + '...' : 'NULL'}`);
 
   try {
     const res = await fetch(GAS_URL, {
