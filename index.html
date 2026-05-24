@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!--
   ============================================================
-  リスト検索ツール — v1.6
+  リスト検索ツール — v1.7
   ============================================================
   Released: 2026-05-24
   Source:   Google Sheets "リスト20251116"
@@ -17,6 +17,15 @@
     ✓ iOS Brave対応 (カスタムダイアログ・touchend)
     ✓ ヘッダー右上に入力フォーム (Googleフォーム) リンク
     ✓ noindex, nofollow (検索エンジン除外)
+
+  Changes in v1.7:
+    ✓ ツール内に新規会員登録パネルを追加
+      - ヘッダー「➕ 新規登録」ボタンでスライドパネルを開閉
+      - 会員番号・名前(必須)・担当・メモを入力しGAS経由でシートに追記
+      - A列タイムスタンプ (YYYY/MM/DD HH:MM:SS) を自動生成
+      - 登録後に自動データ更新 → 登録番号の下3桁で即検索
+      - iOS Brave対応・スマホレイアウト対応
+      - GAS側に appendRow アクションを追加(要再デプロイ)
 
   Changes in v1.6:
     ✓ E列編集モードに「📅 今日」日付スタンプ挿入ボタンを追加
@@ -331,6 +340,158 @@
     background: rgba(30, 120, 60, 0.15);
     padding: 1px 3px;
     border-radius: 2px;
+  }
+
+  /* ---------- New entry panel ---------- */
+  .new-entry-panel {
+    background: var(--paper-2);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    margin-bottom: 24px;
+    overflow: hidden;
+    animation: nepSlideDown 0.18s ease;
+  }
+
+  @keyframes nepSlideDown {
+    from { opacity: 0; transform: translateY(-8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .nep-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 24px;
+    border-bottom: 1px solid var(--line);
+    background: var(--ink);
+  }
+
+  .nep-title {
+    font-family: 'Fraunces', serif;
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--paper);
+  }
+
+  .nep-close {
+    background: none;
+    border: none;
+    color: var(--paper);
+    font-size: 18px;
+    cursor: pointer;
+    padding: 4px 8px;
+    opacity: 0.7;
+    transition: opacity 0.12s;
+  }
+  .nep-close:hover { opacity: 1; }
+
+  .nep-body {
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .nep-row {
+    display: grid;
+    grid-template-columns: 100px 1fr;
+    gap: 12px;
+    align-items: center;
+  }
+
+  .nep-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    text-align: right;
+  }
+
+  .nep-required {
+    display: inline-block;
+    background: var(--accent);
+    color: #fff;
+    font-size: 9px;
+    padding: 1px 4px;
+    border-radius: 2px;
+    margin-left: 4px;
+    vertical-align: 1px;
+  }
+
+  .nep-input {
+    font-family: 'Noto Sans JP', sans-serif;
+    font-size: 15px;
+    padding: 10px 14px;
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 2px;
+    color: var(--ink);
+    outline: none;
+    width: 100%;
+    box-sizing: border-box;
+    transition: border-color 0.15s;
+  }
+  .nep-input:focus { border-color: var(--accent); background: #fff; }
+  .nep-input.error { border-color: var(--err); }
+
+  .nep-textarea {
+    resize: vertical;
+    min-height: 72px;
+    line-height: 1.6;
+  }
+
+  .nep-msg {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    min-height: 20px;
+    padding-left: 112px;
+  }
+  .nep-msg.ok  { color: var(--ok); }
+  .nep-msg.err { color: var(--err); }
+
+  .nep-actions {
+    display: flex;
+    gap: 10px;
+    padding-left: 112px;
+  }
+
+  .nep-submit {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    padding: 12px 28px;
+    border-radius: 2px;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .nep-submit:hover { background: #9a3309; }
+  .nep-submit:disabled { background: var(--muted); cursor: wait; }
+
+  .nep-cancel {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    background: none;
+    color: var(--muted);
+    border: 1px solid var(--line);
+    padding: 12px 20px;
+    border-radius: 2px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .nep-cancel:hover { border-color: var(--ink); color: var(--ink); }
+
+  @media (max-width: 480px) {
+    .nep-row { grid-template-columns: 1fr; gap: 4px; }
+    .nep-label { text-align: left; }
+    .nep-msg, .nep-actions { padding-left: 0; }
   }
 
   /* ---------- Search box ---------- */
@@ -996,7 +1157,7 @@
     <input id="pwd" type="password" autocomplete="off" placeholder="••••••••" autofocus />
     <button id="unlockBtn" type="button">UNLOCK</button>
     <div id="lockMsg" class="lock-msg"></div>
-    <div class="version-tag">v1.6</div>
+    <div class="version-tag">v1.7</div>
   </div>
 </div>
 
@@ -1005,17 +1166,48 @@
 
   <header>
     <div class="title-block">
-      <div class="eyebrow">List Lookup / 下3桁・顧客名検索 <span class="version-inline">v1.6</span></div>
+      <div class="eyebrow">List Lookup / 下3桁・顧客名検索 <span class="version-inline">v1.7</span></div>
       <h1 class="main-title">リスト<em>20251116</em></h1>
     </div>
     <div class="meta">
       B列下3桁 → B/C/D/E 表示<br>
       <div class="meta-actions">
-        <a class="form-link" href="https://docs.google.com/forms/d/e/1FAIpQLScOvtVZFFTiNxanIyZOGpjP7U7sfU7R0nzxVUYdieLyOoG1GA/viewform?usp=send_form" target="_blank" rel="noopener">📝 入力フォーム</a>
+        <button class="form-link" id="newEntryBtn" type="button">➕ 新規登録</button>
         <button class="lock-out" id="lockOutBtn">🔒 ロック</button>
       </div>
     </div>
   </header>
+
+  <!-- ====  新規登録パネル  ==== -->
+  <div id="newEntryPanel" class="new-entry-panel" style="display:none">
+    <div class="nep-header">
+      <span class="nep-title">新規会員登録</span>
+      <button class="nep-close" id="newEntryClose" type="button">✕</button>
+    </div>
+    <div class="nep-body">
+      <div class="nep-row">
+        <label class="nep-label" for="nep-b">会員番号 <span class="nep-required">必須</span></label>
+        <input class="nep-input" id="nep-b" type="text" inputmode="numeric" placeholder="例: 001" autocomplete="off" maxlength="20" />
+      </div>
+      <div class="nep-row">
+        <label class="nep-label" for="nep-c">名前 <span class="nep-required">必須</span></label>
+        <input class="nep-input" id="nep-c" type="text" placeholder="例: 田中 花子" autocomplete="off" maxlength="50" />
+      </div>
+      <div class="nep-row">
+        <label class="nep-label" for="nep-d">担当</label>
+        <input class="nep-input" id="nep-d" type="text" placeholder="例: 山田" autocomplete="off" maxlength="50" />
+      </div>
+      <div class="nep-row">
+        <label class="nep-label" for="nep-e">メモ</label>
+        <textarea class="nep-input nep-textarea" id="nep-e" rows="3" placeholder="自由記入"></textarea>
+      </div>
+      <div id="nepMsg" class="nep-msg"></div>
+      <div class="nep-actions">
+        <button class="nep-submit" id="nepSubmitBtn" type="button">登録する</button>
+        <button class="nep-cancel" id="nepCancelBtn" type="button">キャンセル</button>
+      </div>
+    </div>
+  </div>
 
   <div class="search">
     <label for="q">
@@ -1299,6 +1491,118 @@ $pwd.addEventListener('keydown', e => {
   if (e.key === 'Enter') tryUnlock();
 });
 $lockOutBtn.addEventListener('click', showLock);
+
+/* ===========================================================
+   新規登録パネル
+   =========================================================== */
+const $newEntryBtn   = document.getElementById('newEntryBtn');
+const $newEntryPanel = document.getElementById('newEntryPanel');
+const $newEntryClose = document.getElementById('newEntryClose');
+const $nepB          = document.getElementById('nep-b');
+const $nepC          = document.getElementById('nep-c');
+const $nepD          = document.getElementById('nep-d');
+const $nepE          = document.getElementById('nep-e');
+const $nepMsg        = document.getElementById('nepMsg');
+const $nepSubmitBtn  = document.getElementById('nepSubmitBtn');
+const $nepCancelBtn  = document.getElementById('nepCancelBtn');
+
+function openNewEntryPanel() {
+  $newEntryPanel.style.display = 'block';
+  $nepB.value = ''; $nepC.value = ''; $nepD.value = ''; $nepE.value = '';
+  $nepMsg.textContent = ''; $nepMsg.className = 'nep-msg';
+  [$nepB, $nepC, $nepD, $nepE].forEach(el => el.classList.remove('error'));
+  $nepSubmitBtn.disabled = false;
+  $nepB.focus();
+  $newEntryPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function closeNewEntryPanel() {
+  $newEntryPanel.style.display = 'none';
+}
+
+function nepSetMsg(text, kind) {
+  $nepMsg.textContent = text;
+  $nepMsg.className = 'nep-msg' + (kind ? ' ' + kind : '');
+}
+
+// タイムスタンプ生成: 2025/04/05 10:32:08 形式
+function nowTimestamp() {
+  const d = new Date();
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}/${pad(d.getMonth()+1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
+async function submitNewEntry() {
+  // バリデーション
+  const bVal = $nepB.value.trim();
+  const cVal = $nepC.value.trim();
+  let valid = true;
+  [$nepB, $nepC, $nepD, $nepE].forEach(el => el.classList.remove('error'));
+
+  if (!bVal) { $nepB.classList.add('error'); valid = false; }
+  if (!cVal) { $nepC.classList.add('error'); valid = false; }
+  if (!valid) { nepSetMsg('会員番号と名前は必須です', 'err'); return; }
+
+  $nepSubmitBtn.disabled = true;
+  nepSetMsg('登録中…', '');
+  dlog(`appendRow: B=${bVal} C=${cVal} D=${$nepD.value.trim()} E=${$nepE.value.trim()}`);
+
+  try {
+    const res = await fetch(GAS_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        password: API_PW,
+        action: 'appendRow',
+        timestamp: nowTimestamp(),
+        bValue: bVal,
+        cValue: cVal,
+        dValue: $nepD.value.trim(),
+        eValue: $nepE.value.trim(),
+      }),
+    });
+    const json = await res.json();
+    dlog(`appendRow response: ${JSON.stringify(json)}`);
+    if (json.ok) {
+      nepSetMsg('✅ 登録しました', 'ok');
+      // データを再取得して検索欄に会員番号をセット
+      await loadCSV({ silent: true });
+      setTimeout(() => {
+        closeNewEntryPanel();
+        // 登録した番号の下3桁で即検索
+        const last3 = bVal.slice(-3);
+        if (/^\d{3}$/.test(last3)) {
+          $q.value = last3;
+          $q.classList.remove('mode-name');
+          $q.classList.add('mode-num');
+          doSearch();
+        }
+      }, 1000);
+    } else {
+      nepSetMsg('❌ エラー: ' + (json.error || '不明'), 'err');
+      $nepSubmitBtn.disabled = false;
+    }
+  } catch (err) {
+    dlog('appendRow fetch error: ' + err, 'err');
+    nepSetMsg('❌ 通信エラー。再試行してください', 'err');
+    $nepSubmitBtn.disabled = false;
+  }
+}
+
+// iOS Brave対応: click + touchend 両方登録
+function addTouchClick(el, fn) {
+  let touchHandled = false;
+  el.addEventListener('touchend', e => {
+    touchHandled = true; e.preventDefault(); fn();
+    setTimeout(() => { touchHandled = false; }, 500);
+  }, { passive: false });
+  el.addEventListener('click', () => { if (!touchHandled) fn(); });
+}
+
+addTouchClick($newEntryBtn,   openNewEntryPanel);
+addTouchClick($newEntryClose, closeNewEntryPanel);
+addTouchClick($nepCancelBtn,  closeNewEntryPanel);
+addTouchClick($nepSubmitBtn,  submitNewEntry);
 
 /* ===========================================================
    Status helpers
