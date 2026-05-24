@@ -1793,8 +1793,18 @@ async function submitNewEntry() {
     const json = JSON.parse(rawText);
     if (json.ok) {
       nepSetMsg('✅ 登録しました', 'ok');
-      // データを再取得して検索欄に会員番号をセット
-      await loadCSV({ silent: true });
+
+      // Googleキャッシュ(最大5分)を待たずに即検索できるよう
+      // 登録したデータをローカルのrows配列に直接追加する
+      const newRow = new Array(Math.max(headers.length, 5)).fill('');
+      newRow[0] = nowTimestamp(); // A列: タイムスタンプ
+      newRow[1] = bVal;           // B列: 会員番号
+      newRow[2] = cVal;           // C列: 名前
+      newRow[3] = $nepD.value.trim(); // D列: 担当
+      newRow[4] = $nepE.value.trim(); // E列: メモ
+      rows.push(newRow);
+      dlog(`local rows updated: ${rows.length} rows`);
+
       setTimeout(() => {
         closeNewEntryPanel();
         // 登録した番号の下3桁で即検索
@@ -1804,8 +1814,14 @@ async function submitNewEntry() {
           $q.classList.remove('mode-name');
           $q.classList.add('mode-num');
           doSearch();
+        } else if (cVal.length >= 2) {
+          // 番号が3桁でない場合は名前で検索
+          $q.value = cVal;
+          $q.classList.remove('mode-num');
+          $q.classList.add('mode-name');
+          doSearch();
         }
-      }, 1000);
+      }, 800);
     } else {
       nepSetMsg('❌ エラー: ' + (json.error || '不明'), 'err');
       $nepSubmitBtn.disabled = false;
