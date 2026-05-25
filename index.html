@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!--
   ============================================================
-  リスト検索ツール — v1.7
+  リスト検索ツール — v1.8
   ============================================================
   Released: 2026-05-24
   Source:   Google Sheets "リスト20251116"
@@ -17,6 +17,13 @@
     ✓ iOS Brave対応 (カスタムダイアログ・touchend)
     ✓ ヘッダー右上に入力フォーム (Googleフォーム) リンク
     ✓ noindex, nofollow (検索エンジン除外)
+
+  Changes in v1.8:
+    ✓ 担当フィールドをプルダウン選択に変更 (17名分)
+    ✓ 📖 使い方モーダルをヘッダーに追加 (背景タップで閉じる)
+    ✓ 新規登録パネルのメモ欄に「📅 今日」日付スタンプボタンを追加
+    ✓ 新規登録後にローカルrows即時追加でキャッシュ遅延なく即検索
+    ✓ 新規登録fetchのContent-Typeをtext/plainに修正(CORS対応)
 
   Changes in v1.7:
     ✓ ツール内に新規会員登録パネルを追加
@@ -1316,7 +1323,7 @@
     <input id="pwd" type="password" autocomplete="off" placeholder="••••••••" autofocus />
     <button id="unlockBtn" type="button">UNLOCK</button>
     <div id="lockMsg" class="lock-msg"></div>
-    <div class="version-tag">v1.7</div>
+    <div class="version-tag">v1.8</div>
   </div>
 </div>
 
@@ -1325,7 +1332,7 @@
 
   <header>
     <div class="title-block">
-      <div class="eyebrow">List Lookup / 下3桁・顧客名検索 <span class="version-inline">v1.7</span></div>
+      <div class="eyebrow">List Lookup / 下3桁・顧客名検索 <span class="version-inline">v1.8</span></div>
       <h1 class="main-title">リスト<em>20251116</em></h1>
     </div>
     <div class="meta">
