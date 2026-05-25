@@ -2312,8 +2312,75 @@ async function saveEdit(idx, col) {
 
   const oldVal = (currentMatches[idx][colIdx] ?? '').toString();
   const bVal = (currentMatches[idx][1] ?? '').toString();
+  const cVal = (currentMatches[idx][2] ?? '').toString();
   dlog(`oldVal.length=${oldVal.length}, newVal.length=${newVal.length}, bVal=${bVal}`);
 
+  // ── E列に「削除」と入力された場合は行削除 ──────────────
+  if (col === 'E' && newVal.trim() === '削除') {
+    const confirmed = await customConfirm(
+      `「${cVal}」(${bVal}) をDBから完全に削除します。\nこの操作は取り消せません。`,
+      '削除前のメモ: ' + oldVal,
+      '→ この行を削除する'
+    );
+    if (!confirmed) return;
+
+    if (!GAS_URL) {
+      $msg.textContent = '保存先APIが設定されていません';
+      $msg.className = 'cell-msg err';
+      return;
+    }
+
+    $saveBtn.disabled = true;
+    $cancelBtn.disabled = true;
+    $msg.textContent = '削除中…';
+    $msg.className = 'cell-msg loading';
+
+    try {
+      const res = await fetch(GAS_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({
+          password: API_PW,
+          action: 'deleteRow',
+          bValue: bVal,
+        }),
+        redirect: 'follow'
+      });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const json = JSON.parse(await res.text());
+      if (!json.ok) throw new Error(json.error || 'unknown error');
+
+      dlog(`deleteRow success: row=${json.deletedRow}`);
+
+      // ローカルからも削除
+      currentMatches.splice(idx, 1);
+      const rowIdx = rows.findIndex(r => String(r[1] ?? '').trim() === String(bVal).trim());
+      if (rowIdx !== -1) rows.splice(rowIdx, 1);
+
+      // カードをフェードアウトして削除
+      const $card = $resultBody.querySelector(`[data-idx="${idx}"]`);
+      if ($card) {
+        $card.style.transition = 'opacity 0.4s';
+        $card.style.opacity = '0';
+        setTimeout(() => {
+          $card.remove();
+          $count.textContent = `${currentMatches.length} 件`;
+          if (currentMatches.length === 0) {
+            $resultBody.innerHTML = `<div class="empty">削除しました</div>`;
+          }
+        }, 400);
+      }
+    } catch(err) {
+      dlog('deleteRow error: ' + err, 'err');
+      $msg.textContent = '❌ 削除失敗: ' + err.message;
+      $msg.className = 'cell-msg err';
+      $saveBtn.disabled = false;
+      $cancelBtn.disabled = false;
+    }
+    return;
+  }
+
+  // ── 通常の保存処理 ────────────────────────────────────
   if (newVal === oldVal) {
     dlog('no change, exiting');
     exitEditMode(idx, col);
