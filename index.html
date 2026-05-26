@@ -1670,7 +1670,7 @@ window.addEventListener('unhandledrejection', (e) => dlog('PROMISE REJECT: ' + (
 if (DEBUG) dlog('Debug mode active');
 
 /* ===========================================================
-   担当リスト (localStorage対応)
+   担当リスト (GASスプレッドシート同期 + localStorageキャッシュ)
    =========================================================== */
 const TANTOU_STORAGE_KEY = 'salon_tantou_list';
 const TANTOU_DEFAULT = [
@@ -1678,7 +1678,8 @@ const TANTOU_DEFAULT = [
   'かじ','小笠原','近藤','川本','たくや','ミコ','やまがた','指名なし','ペアリスト'
 ];
 
-function loadTantouList() {
+// localStorageから読む(キャッシュ or デフォルト)
+function loadTantouListLocal() {
   try {
     const saved = localStorage.getItem(TANTOU_STORAGE_KEY);
     if (saved) return JSON.parse(saved);
@@ -1686,14 +1687,58 @@ function loadTantouList() {
   return TANTOU_DEFAULT.slice();
 }
 
-function saveTantouList(list) {
-  try {
-    localStorage.setItem(TANTOU_STORAGE_KEY, JSON.stringify(list));
-  } catch(e) {}
+// localStorageに書く
+function saveTantouListLocal(list) {
+  try { localStorage.setItem(TANTOU_STORAGE_KEY, JSON.stringify(list)); } catch(e) {}
 }
 
-// グローバルな担当リスト (render関数から参照される)
-let TANTOU_LIST = loadTantouList();
+// GASから取得してlocalStorageを更新
+async function fetchTantouListFromGAS() {
+  if (!GAS_URL) return;
+  try {
+    const res = await fetch(GAS_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ password: API_PW, action: 'getTantouList' }),
+      redirect: 'follow'
+    });
+    const json = JSON.parse(await res.text());
+    if (json.ok && Array.isArray(json.list) && json.list.length > 0) {
+      TANTOU_LIST = json.list;
+      saveTantouListLocal(TANTOU_LIST);
+      dlog(`tantouList loaded from GAS: ${TANTOU_LIST.length}件`);
+    } else {
+      dlog('tantouList: GASにデータなし、localStorageを使用');
+    }
+  } catch(err) {
+    dlog('tantouList fetch error: ' + err, 'warn');
+  }
+}
+
+// GASに保存してlocalStorageも更新
+async function saveTantouListToGAS(list) {
+  saveTantouListLocal(list);
+  if (!GAS_URL) return;
+  try {
+    const res = await fetch(GAS_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ password: API_PW, action: 'setTantouList', list }),
+      redirect: 'follow'
+    });
+    const json = JSON.parse(await res.text());
+    if (json.ok) {
+      dlog(`tantouList saved to GAS: ${json.count}件`);
+    } else {
+      dlog('tantouList save error: ' + json.error, 'warn');
+    }
+  } catch(err) {
+    dlog('tantouList save error: ' + err, 'warn');
+  }
+}
+
+// グローバルな担当リスト (まずlocalStorageから、GAS取得後に上書き)
+let TANTOU_LIST = loadTantouListLocal();
 
 /* ===========================================================
    ENCRYPTED PAYLOAD
@@ -1856,7 +1901,10 @@ async function tryUnlock() {
 function showApp() {
   $lockScreen.style.display = 'none';
   $app.style.display = 'block';
-  if (DEBUG) initTantouPanel();
+  // GASから担当リストを取得(非同期・完了後にパネルを初期化)
+  fetchTantouListFromGAS().then(() => {
+    if (DEBUG) initTantouPanel();
+  });
   startAutoRefresh();
 }
 
@@ -1882,7 +1930,7 @@ function initTantouPanel() {
         <button class="tantou-chip-del" data-idx="${i}" title="削除">×</button>`;
       chip.querySelector('.tantou-chip-del').addEventListener('click', () => {
         TANTOU_LIST.splice(i, 1);
-        saveTantouList(TANTOU_LIST);
+        saveTantouListToGAS(TANTOU_LIST);
         renderChips();
         // 新規登録パネルのselectも更新
         updateNepDSelect();
@@ -1903,7 +1951,7 @@ function initTantouPanel() {
       return;
     }
     TANTOU_LIST.push(val);
-    saveTantouList(TANTOU_LIST);
+    saveTantouListToGAS(TANTOU_LIST);
     $input.value = '';
     renderChips();
     updateNepDSelect();
