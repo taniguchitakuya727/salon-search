@@ -1331,6 +1331,101 @@
     display: none;
   }
   #debugPanel.active ~ #debugClose { display: block; }
+
+  /* ---------- 担当管理パネル (デバッグモード時のみ表示) ---------- */
+  #tantouPanel {
+    display: none;
+    background: #1a1a2e;
+    border-bottom: 2px solid #e94560;
+    padding: 12px 16px;
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+  }
+  #tantouPanel.active { display: block; }
+
+  .tantou-panel-title {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    color: #e94560;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+
+  .tantou-list-wrap {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 10px;
+  }
+
+  .tantou-chip {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    background: #16213e;
+    border: 1px solid #e94560;
+    border-radius: 2px;
+    padding: 4px 8px;
+    font-family: 'Noto Sans JP', sans-serif;
+    font-size: 12px;
+    color: #eee;
+  }
+
+  .tantou-chip-del {
+    background: none;
+    border: none;
+    color: #e94560;
+    font-size: 14px;
+    cursor: pointer;
+    padding: 0 2px;
+    line-height: 1;
+    opacity: 0.7;
+    transition: opacity 0.12s;
+  }
+  .tantou-chip-del:hover { opacity: 1; }
+
+  .tantou-add-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+
+  #tantouInput {
+    font-family: 'Noto Sans JP', sans-serif;
+    font-size: 13px;
+    padding: 6px 10px;
+    background: #16213e;
+    border: 1px solid #444;
+    border-radius: 2px;
+    color: #eee;
+    outline: none;
+    width: 160px;
+    transition: border-color 0.15s;
+  }
+  #tantouInput:focus { border-color: #e94560; }
+
+  #tantouAddBtn {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 6px 14px;
+    background: #e94560;
+    color: #fff;
+    border: none;
+    border-radius: 2px;
+    cursor: pointer;
+    transition: background 0.12s;
+  }
+  #tantouAddBtn:hover { background: #c73652; }
+
+  #tantouMsg {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: #0f0;
+    margin-left: 8px;
+  }
 </style>
 </head>
 <body>
@@ -1350,6 +1445,17 @@
 
 <!-- =====================  MAIN APP  ===================== -->
 <div id="app" class="wrap" style="display:none">
+
+  <!-- 担当管理パネル (デバッグモード時のみ表示) -->
+  <div id="tantouPanel">
+    <div class="tantou-panel-title">⚙ 担当リスト管理 (debug)</div>
+    <div class="tantou-list-wrap" id="tantouChips"></div>
+    <div class="tantou-add-row">
+      <input id="tantouInput" type="text" placeholder="担当名を追加" maxlength="20" autocomplete="off" />
+      <button id="tantouAddBtn" type="button">＋ 追加</button>
+      <span id="tantouMsg"></span>
+    </div>
+  </div>
 
   <header>
     <div class="title-block">
@@ -1564,6 +1670,32 @@ window.addEventListener('unhandledrejection', (e) => dlog('PROMISE REJECT: ' + (
 if (DEBUG) dlog('Debug mode active');
 
 /* ===========================================================
+   担当リスト (localStorage対応)
+   =========================================================== */
+const TANTOU_STORAGE_KEY = 'salon_tantou_list';
+const TANTOU_DEFAULT = [
+  'ヨシナカ','詩子','志村','はらだ','ミネ','みその','キリ','もり',
+  'かじ','小笠原','近藤','川本','たくや','ミコ','やまがた','指名なし','ペアリスト'
+];
+
+function loadTantouList() {
+  try {
+    const saved = localStorage.getItem(TANTOU_STORAGE_KEY);
+    if (saved) return JSON.parse(saved);
+  } catch(e) {}
+  return TANTOU_DEFAULT.slice();
+}
+
+function saveTantouList(list) {
+  try {
+    localStorage.setItem(TANTOU_STORAGE_KEY, JSON.stringify(list));
+  } catch(e) {}
+}
+
+// グローバルな担当リスト (render関数から参照される)
+let TANTOU_LIST = loadTantouList();
+
+/* ===========================================================
    ENCRYPTED PAYLOAD
    AES-256-GCM, PBKDF2-SHA256 250k iterations
    復号後のJSON: { csv, gas, apiPw }
@@ -1724,7 +1856,77 @@ async function tryUnlock() {
 function showApp() {
   $lockScreen.style.display = 'none';
   $app.style.display = 'block';
+  if (DEBUG) initTantouPanel();
   startAutoRefresh();
+}
+
+/* ===========================================================
+   担当管理パネル (デバッグモード時のみ)
+   =========================================================== */
+function initTantouPanel() {
+  const $panel    = document.getElementById('tantouPanel');
+  const $chips    = document.getElementById('tantouChips');
+  const $input    = document.getElementById('tantouInput');
+  const $addBtn   = document.getElementById('tantouAddBtn');
+  const $msg      = document.getElementById('tantouMsg');
+
+  if (!$panel) return;
+  $panel.classList.add('active');
+
+  function renderChips() {
+    $chips.innerHTML = '';
+    TANTOU_LIST.forEach((name, i) => {
+      const chip = document.createElement('div');
+      chip.className = 'tantou-chip';
+      chip.innerHTML = `<span>${escapeHTML(name)}</span>
+        <button class="tantou-chip-del" data-idx="${i}" title="削除">×</button>`;
+      chip.querySelector('.tantou-chip-del').addEventListener('click', () => {
+        TANTOU_LIST.splice(i, 1);
+        saveTantouList(TANTOU_LIST);
+        renderChips();
+        // 新規登録パネルのselectも更新
+        updateNepDSelect();
+        $msg.textContent = `「${name}」を削除しました`;
+        setTimeout(() => { $msg.textContent = ''; }, 2000);
+        dlog(`tantou deleted: ${name}`);
+      });
+      $chips.appendChild(chip);
+    });
+  }
+
+  function addTantou() {
+    const val = $input.value.trim();
+    if (!val) return;
+    if (TANTOU_LIST.includes(val)) {
+      $msg.textContent = '既に存在します';
+      setTimeout(() => { $msg.textContent = ''; }, 2000);
+      return;
+    }
+    TANTOU_LIST.push(val);
+    saveTantouList(TANTOU_LIST);
+    $input.value = '';
+    renderChips();
+    updateNepDSelect();
+    $msg.textContent = `「${val}」を追加しました`;
+    setTimeout(() => { $msg.textContent = ''; }, 2000);
+    dlog(`tantou added: ${val}`);
+  }
+
+  $addBtn.addEventListener('click', addTantou);
+  $input.addEventListener('keydown', e => { if (e.key === 'Enter') addTantou(); });
+
+  renderChips();
+}
+
+// 新規登録パネルのD列selectを最新のTANTOU_LISTで更新
+function updateNepDSelect() {
+  const $sel = document.getElementById('nep-d');
+  if (!$sel) return;
+  const current = $sel.value;
+  $sel.innerHTML = `<option value="">— 選択してください —</option>` +
+    TANTOU_LIST.map(t =>
+      `<option value="${t}"${t === current ? ' selected' : ''}>${t}</option>`
+    ).join('');
 }
 
 function showLock() {
@@ -2117,12 +2319,6 @@ function render(result, query) {
 
   currentMatches = matches.slice();
   editingKey = null;
-
-  // 担当プルダウン選択肢 (新規登録パネルと共通)
-  const TANTOU_LIST = [
-    'ヨシナカ','詩子','志村','はらだ','ミネ','みその','キリ','もり',
-    'かじ','小笠原','近藤','川本','たくや','ミコ','やまがた','指名なし','ペアリスト'
-  ];
 
   function editableCell(col, idx, val, opts) {
     const { rows = 1, isE = false, isSelect = false } = opts || {};
