@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!--
   ============================================================
-  リスト検索ツール — v1.8
+  リスト検索ツール — v2.0
   ============================================================
   Released: 2026-05-24
   Source:   Google Sheets "リスト20251116"
@@ -17,6 +17,24 @@
     ✓ iOS Brave対応 (カスタムダイアログ・touchend)
     ✓ ヘッダー右上に入力フォーム (Googleフォーム) リンク
     ✓ noindex, nofollow (検索エンジン除外)
+
+  Changes in v2.0:
+    ✓ 担当リストをGASスプレッドシートで同期
+      - 「担当リスト」シートに保存、全端末で共有
+      - localStorageをキャッシュとして併用(高速起動)
+      - GAS: getTantouList / setTantouList アクションを追加
+
+  Changes in v1.9:
+    ✓ E列メモに「削除」と入力して保存すると行をDBから削除
+      - 確認ダイアログ表示後に削除実行
+      - 削除後カードがフェードアウト、ローカルからも即時削除
+      - GAS: deleteRow アクションを追加
+    ✓ D列(担当)をプルダウン編集可能に
+      - 検索結果カードにも✎ボタンを追加
+      - 新規登録パネルと同じ17名のプルダウン
+    ✓ デバッグモード(?debug=1)で担当リストを追加・削除可能に
+      - 画面上部に担当管理パネルを表示
+      - 変更は検索結果・新規登録パネルのプルダウンに即反映
 
   Changes in v1.8:
     ✓ 担当フィールドをプルダウン選択に変更 (17名分)
@@ -1439,7 +1457,7 @@
     <input id="pwd" type="password" autocomplete="off" placeholder="••••••••" autofocus />
     <button id="unlockBtn" type="button">UNLOCK</button>
     <div id="lockMsg" class="lock-msg"></div>
-    <div class="version-tag">v1.8</div>
+    <div class="version-tag">v2.0</div>
   </div>
 </div>
 
@@ -1459,7 +1477,7 @@
 
   <header>
     <div class="title-block">
-      <div class="eyebrow">List Lookup / 下3桁・顧客名検索 <span class="version-inline">v1.8</span></div>
+      <div class="eyebrow">List Lookup / 下3桁・顧客名検索 <span class="version-inline">v2.0</span></div>
     </div>
     <div class="meta">
       B列下3桁 → B/C/D/E 表示<br>
