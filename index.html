@@ -899,7 +899,29 @@
     transform: translateY(1px);
   }
 
-  /* C列の編集はコンパクトに */
+  /* D列プルダウン */
+  .cell-select {
+    font-family: 'Noto Sans JP', sans-serif;
+    font-size: 14px;
+    padding: 8px 32px 8px 10px;
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 2px;
+    color: var(--ink);
+    width: 100%;
+    box-sizing: border-box;
+    outline: none;
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23999' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    cursor: pointer;
+    transition: border-color 0.15s;
+  }
+  .cell-select:focus { border-color: var(--accent); }
+
+  /* ---------- C列の編集はコンパクトに ---------- */
   .rc-c-wrap .cell-actions {
     margin-top: 6px;
   }
@@ -2096,8 +2118,14 @@ function render(result, query) {
   currentMatches = matches.slice();
   editingKey = null;
 
+  // 担当プルダウン選択肢 (新規登録パネルと共通)
+  const TANTOU_LIST = [
+    'ヨシナカ','詩子','志村','はらだ','ミネ','みその','キリ','もり',
+    'かじ','小笠原','近藤','川本','たくや','ミコ','やまがた','指名なし','ペアリスト'
+  ];
+
   function editableCell(col, idx, val, opts) {
-    const { rows = 1, isE = false } = opts || {};
+    const { rows = 1, isE = false, isSelect = false } = opts || {};
     const valueClass = isE ? 'rc-value rc-e-value' : 'rc-value rc-c-value';
     const wrapClass = isE ? 'rc-e-wrap' : 'rc-c-wrap';
     const editClass = isE ? 'rc-e-edit' : 'rc-c-edit';
@@ -2105,6 +2133,17 @@ function render(result, query) {
     const displayVal = (col === 'C' && mode === 'name' && nameQuery)
       ? highlightName(val, nameQuery)
       : escapeHTML(val);
+
+    // 入力欄: プルダウン or テキストエリア
+    const inputHtml = isSelect
+      ? `<select class="cell-select" data-textarea="${col}-${idx}">
+           <option value="">— 選択 —</option>
+           ${TANTOU_LIST.map(t =>
+             `<option value="${t}"${t === val ? ' selected' : ''}>${t}</option>`
+           ).join('')}
+         </select>`
+      : `<textarea class="cell-textarea" data-textarea="${col}-${idx}" rows="${rows}"></textarea>`;
+
     return `
       <div class="${wrapClass}" data-cell="${col}-${idx}">
         <div class="rc-edit-header">
@@ -2114,7 +2153,7 @@ function render(result, query) {
         <div class="${valueClass}" data-display="${col}-${idx}">${displayVal}</div>
         <div class="${editClass}" data-edit="${col}-${idx}" style="display:none">
           ${isE ? `<div class="stamp-bar"><button class="btn-stamp" data-action="stamp" data-idx="${idx}" data-col="${col}">📅 今日</button></div>` : ''}
-          <textarea class="cell-textarea" data-textarea="${col}-${idx}" rows="${rows}"></textarea>
+          ${inputHtml}
           <div class="cell-actions">
             <button class="btn-save" data-action="save" data-idx="${idx}" data-col="${col}">💾 保存</button>
             <button class="btn-cancel" data-action="cancel" data-idx="${idx}" data-col="${col}">キャンセル</button>
@@ -2134,7 +2173,7 @@ function render(result, query) {
         <div class="rc-left">
           <div class="rc-cell"><span class="rc-label">B</span><span class="rc-value">${highlightLast3(bVal)}</span></div>
           ${editableCell('C', idx, cVal, { rows: 1 })}
-          <div class="rc-cell"><span class="rc-label">D</span><span class="rc-value">${escapeHTML(dVal)}</span></div>
+          ${editableCell('D', idx, dVal, { isSelect: true })}
         </div>
         <div class="rc-right">
           ${editableCell('E', idx, eVal, { rows: 4, isE: true })}
@@ -2206,7 +2245,9 @@ function enterEditMode(idx, col) {
   $edit.style.display = 'block';
   $editBtn.style.display = 'none';
   $textarea.focus();
-  $textarea.setSelectionRange(val.length, val.length);
+  if ($textarea.tagName !== 'SELECT') {
+    $textarea.setSelectionRange(val.length, val.length);
+  }
 }
 
 function exitEditMode(idx, col) {
@@ -2301,13 +2342,16 @@ async function saveEdit(idx, col) {
   const $saveBtn = $resultBody.querySelector(`[data-action="save"][data-idx="${idx}"][data-col="${col}"]`);
   const $cancelBtn = $resultBody.querySelector(`[data-action="cancel"][data-idx="${idx}"][data-col="${col}"]`);
 
-  // iOS対策: textareaのフォーカスを外して値を確定
+  // iOS対策: textareaのフォーカスを外して値を確定 (selectは不要だが共通で呼ぶ)
   $textarea.blur();
   await new Promise(r => setTimeout(r, 50));
 
+  const isSelect = $textarea.tagName === 'SELECT';
   const valFromValue = $textarea.value;
   const valFromData = $textarea.dataset.currentValue ?? '';
-  const newVal = valFromValue.length >= valFromData.length ? valFromValue : valFromData;
+  const newVal = isSelect
+    ? valFromValue
+    : (valFromValue.length >= valFromData.length ? valFromValue : valFromData);
   dlog(`value=${valFromValue.length}, data=${valFromData.length}, using=${newVal.length}`);
 
   const oldVal = (currentMatches[idx][colIdx] ?? '').toString();
