@@ -46,7 +46,7 @@
   Changes in v1.7:
     ✓ ツール内に新規会員登録パネルを追加
       - ヘッダー「➕ 新規登録」ボタンでスライドパネルを開閉
-      - 会員番号・名前(必須)・担当・メモを入力しGAS経由でシートに追記
+      - 会員番号(必須)・名前・担当・メモを入力しGAS経由でシートに追記
       - A列タイムスタンプ (YYYY/MM/DD HH:MM:SS) を自動生成
       - 登録後に自動データ更新 → 登録番号の下3桁で即検索
       - iOS Brave対応・スマホレイアウト対応
@@ -1520,7 +1520,7 @@
         <input class="nep-input" id="nep-b" type="text" inputmode="numeric" placeholder="例: 001" autocomplete="off" maxlength="20" />
       </div>
       <div class="nep-row">
-        <label class="nep-label" for="nep-c">名前 <span class="nep-required">必須</span></label>
+        <label class="nep-label" for="nep-c">名前</label>
         <input class="nep-input" id="nep-c" type="text" placeholder="例: 田中 花子" autocomplete="off" maxlength="50" />
       </div>
       <div class="nep-row">
@@ -1628,7 +1628,7 @@
 
       <div class="howto-section">
         <div class="howto-section-title">➕ 新規登録する</div>
-        <div class="howto-text">「➕ 新規登録」ボタン → 会員番号・名前(必須)・担当・メモを入力 → 「登録する」。<br>タイムスタンプはA列に自動記録されます。登録後は自動でその番号を検索します。</div>
+        <div class="howto-text">「➕ 新規登録」ボタン → 会員番号(必須)・名前・担当・メモを入力 → 「登録する」。<br>タイムスタンプはA列に自動記録されます。登録後は自動でその番号を検索します。</div>
       </div>
 
       <div class="howto-section">
@@ -2087,8 +2087,7 @@ async function submitNewEntry() {
   [$nepB, $nepC, $nepD, $nepE].forEach(el => el.classList.remove('error'));
 
   if (!bVal) { $nepB.classList.add('error'); valid = false; }
-  if (!cVal) { $nepC.classList.add('error'); valid = false; }
-  if (!valid) { nepSetMsg('会員番号と名前は必須です', 'err'); return; }
+  if (!valid) { nepSetMsg('会員番号は必須です', 'err'); return; }
 
   $nepSubmitBtn.disabled = true;
   nepSetMsg('登録中…', '');
