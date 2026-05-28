@@ -1604,7 +1604,7 @@
       <div class="howto-section">
         <div class="howto-section-title">✏️ 編集する</div>
         <div class="howto-text">C列(顧客名)・E列(メモ)の「✎」ボタン → 編集 → 「💾 保存」でシートに即反映。</div>
-        <div class="howto-item"><span class="howto-badge">📅</span>メモ編集中に「📅 今日」を押すとカーソル位置に<strong id="howtoTodayStamp">[YYYY/MM/DD]</strong>形式の日付を挿入できます。</div>
+        <div class="howto-item"><span class="howto-badge">📅</span>メモ編集中に「📅 今日」を押すとカーソル位置に<strong id="howtoTodayStamp">YY.M/D</strong>形式の日付を挿入できます。</div>
       </div>
 
       <div class="howto-section">
@@ -2157,7 +2157,8 @@ const $nepStampBtn = document.getElementById('nepStampBtn');
 addTouchClick($nepStampBtn, () => {
   const now = new Date();
   const pad = n => String(n).padStart(2, '0');
-  const stamp = `[${now.getFullYear()}/${pad(now.getMonth()+1)}/${pad(now.getDate())}] `;
+  const yy = String(now.getFullYear()).slice(-2);
+  const stamp = `${yy}.${now.getMonth()+1}/${now.getDate()} `;
   const start = $nepE.selectionStart ?? $nepE.value.length;
   const end   = $nepE.selectionEnd   ?? start;
   const before = $nepE.value.slice(0, start);
@@ -2183,7 +2184,8 @@ function openHowTo() {
   if (el) {
     const d = new Date();
     const pad = n => String(n).padStart(2, '0');
-    el.textContent = `[${d.getFullYear()}/${pad(d.getMonth()+1)}/${pad(d.getDate())}]`;
+    const yy2 = String(d.getFullYear()).slice(-2);
+    el.textContent = `${yy2}.${d.getMonth()+1}/${d.getDate()}`;
   }
   $howToModal.classList.add('active');
 }
@@ -2535,7 +2537,8 @@ function insertDateStamp(idx, col) {
 
   // 今日の日付を [YYYY/MM/DD] 形式で生成
   const now = new Date();
-  const stamp = `[${now.getFullYear()}/${String(now.getMonth()+1).padStart(2,'0')}/${String(now.getDate()).padStart(2,'0')}] `;
+  const yy = String(now.getFullYear()).slice(-2);
+  const stamp = `${yy}.${now.getMonth()+1}/${now.getDate()} `;
 
   // カーソル位置に挿入 (iOS対応: execCommand fallback)
   const start = $textarea.selectionStart ?? $textarea.value.length;
