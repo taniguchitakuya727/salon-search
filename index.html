@@ -2059,6 +2059,7 @@ function openNewEntryPanel() {
   $nepMsg.textContent = ''; $nepMsg.className = 'nep-msg';
   [$nepB, $nepC, $nepD, $nepE].forEach(el => el.classList.remove('error'));
   $nepSubmitBtn.disabled = false;
+  nepFetchedFromSource = false; // フラグリセット
   $nepB.focus();
   $newEntryPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
@@ -2116,6 +2117,19 @@ async function submitNewEntry() {
     if (json.ok) {
       nepSetMsg('✅ 登録しました', 'ok');
 
+      // 取得ボタンで取得したデータならソースをクリア
+      if (nepFetchedFromSource && GAS_URL) {
+        fetch(GAS_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify({ password: API_PW, action: 'clearSourceRow' }),
+          redirect: 'follow'
+        }).then(r => r.text()).then(t => {
+          dlog(`clearSourceRow: ${t}`);
+        }).catch(e => dlog('clearSourceRow error: ' + e, 'warn'));
+        nepFetchedFromSource = false;
+      }
+
       // Googleキャッシュ(最大5分)を待たずに即検索できるよう
       // 登録したデータをローカルのrows配列に直接追加する
       const newRow = new Array(Math.max(headers.length, 5)).fill('');
@@ -2171,6 +2185,8 @@ addTouchClick($nepCancelBtn,  closeNewEntryPanel);
 addTouchClick($nepSubmitBtn,  submitNewEntry);
 
 // 取得ボタン: ファイルAのメモシートA7:D7を新規登録フォームに自動入力
+// 取得済みフラグ(登録後にclearSourceRowを呼ぶかどうか)
+let nepFetchedFromSource = false;
 const $nepFetchBtn = document.getElementById('nepFetchBtn');
 addTouchClick($nepFetchBtn, async () => {
   if (!GAS_URL) { nepSetMsg('APIが未接続です', 'err'); return; }
@@ -2202,6 +2218,7 @@ addTouchClick($nepFetchBtn, async () => {
     }
 
     [$nepB, $nepC].forEach(el => el.classList.remove('error'));
+    nepFetchedFromSource = true; // 取得済みフラグをセット
     nepSetMsg('✅ 取得しました', 'ok');
     setTimeout(() => { nepSetMsg('', ''); }, 2000);
   } catch(err) {
