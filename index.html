@@ -2296,12 +2296,11 @@ function showNepCandidates(bVal) {
   $nepCandidates.style.display = 'none';
   if (!bVal || rows.length === 0) return;
 
-  // 下3桁でマッチ検索
-  const last3 = bVal.slice(-3);
-  const matches = /^\d{3}$/.test(last3)
+  // 13桁完全一致で検索
+  const matches = bVal.length === 13
     ? rows.filter(r => {
         const b = String(r[1] ?? '').trim();
-        return b.length >= 3 && b.slice(-3) === last3;
+        return b === bVal;
       })
     : [];
 
