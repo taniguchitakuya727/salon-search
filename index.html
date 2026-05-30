@@ -367,6 +367,60 @@
     border-radius: 2px;
   }
 
+  /* 名前候補リスト */
+  .nep-c-wrap {
+    position: relative;
+    width: 100%;
+  }
+
+  .nep-candidates {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: var(--paper);
+    border: 1px solid var(--accent);
+    border-top: none;
+    border-radius: 0 0 2px 2px;
+    z-index: 100;
+    max-height: 200px;
+    overflow-y: auto;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+  }
+
+  .nep-candidate-item {
+    padding: 10px 14px;
+    font-family: 'Noto Sans JP', sans-serif;
+    font-size: 14px;
+    cursor: pointer;
+    border-bottom: 1px solid var(--line);
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    transition: background 0.1s;
+  }
+  .nep-candidate-item:last-child { border-bottom: none; }
+  .nep-candidate-item:hover { background: var(--accent-soft); }
+
+  .nep-candidate-name {
+    font-weight: 500;
+    color: var(--ink);
+  }
+
+  .nep-candidate-sub {
+    font-size: 11px;
+    color: var(--muted);
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .nep-candidate-new {
+    padding: 8px 14px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    font-style: italic;
+  }
+
   /* ---------- New entry panel ---------- */
   .new-entry-panel {
     background: var(--paper-2);
@@ -1521,7 +1575,10 @@
       </div>
       <div class="nep-row">
         <label class="nep-label" for="nep-c">名前</label>
-        <input class="nep-input" id="nep-c" type="text" placeholder="例: 田中 花子" autocomplete="off" maxlength="50" />
+        <div class="nep-c-wrap">
+          <input class="nep-input" id="nep-c" type="text" placeholder="例: 田中 花子" autocomplete="off" maxlength="50" />
+          <div id="nepCandidates" class="nep-candidates" style="display:none"></div>
+        </div>
       </div>
       <div class="nep-row">
         <label class="nep-label" for="nep-d">担当</label>
@@ -2226,6 +2283,77 @@ addTouchClick($nepFetchBtn, async () => {
     nepSetMsg('❌ ' + err.message, 'err');
   } finally {
     $nepFetchBtn.disabled = false;
+  }
+});
+
+/* ===========================================================
+   新規登録パネル — 会員番号入力時の候補表示
+   =========================================================== */
+const $nepCandidates = document.getElementById('nepCandidates');
+
+function showNepCandidates(bVal) {
+  $nepCandidates.innerHTML = '';
+  $nepCandidates.style.display = 'none';
+  if (!bVal || rows.length === 0) return;
+
+  // 下3桁でマッチ検索
+  const last3 = bVal.slice(-3);
+  const matches = /^\d{3}$/.test(last3)
+    ? rows.filter(r => {
+        const b = String(r[1] ?? '').trim();
+        return b.length >= 3 && b.slice(-3) === last3;
+      })
+    : [];
+
+  if (matches.length === 0) return;
+
+  matches.forEach(r => {
+    const bRaw = String(r[1] ?? '').trim();
+    const cRaw = String(r[2] ?? '').trim();
+    const dRaw = String(r[3] ?? '').trim();
+    const item = document.createElement('div');
+    item.className = 'nep-candidate-item';
+    item.innerHTML = `
+      <span class="nep-candidate-name">${escapeHTML(cRaw) || '(名前なし)'}</span>
+      <span class="nep-candidate-sub">${escapeHTML(bRaw)}${dRaw ? ' · ' + escapeHTML(dRaw) : ''}</span>`;
+
+    // タップで自動入力
+    const fill = () => {
+      $nepB.value = bRaw;
+      $nepC.value = cRaw;
+      $nepE.value = String(r[4] ?? '').trim();
+      // 担当プルダウン
+      const $sel = document.getElementById('nep-d');
+      if ($sel) {
+        const match = [...$sel.options].find(o => o.value === dRaw);
+        $sel.value = match ? dRaw : '';
+      }
+      $nepCandidates.style.display = 'none';
+      dlog(`candidate selected: ${bRaw} ${cRaw}`);
+    };
+
+    let th = false;
+    item.addEventListener('touchend', e => {
+      th = true; e.preventDefault(); fill();
+      setTimeout(() => { th = false; }, 500);
+    }, { passive: false });
+    item.addEventListener('click', () => { if (!th) fill(); });
+
+    $nepCandidates.appendChild(item);
+  });
+
+  $nepCandidates.style.display = 'block';
+}
+
+// 会員番号inputのイベント
+$nepB.addEventListener('input', () => {
+  showNepCandidates($nepB.value.trim());
+});
+
+// パネルを閉じるか他の場所をタップしたら候補を非表示
+document.addEventListener('click', e => {
+  if (!e.target.closest('#nep-b') && !e.target.closest('#nepCandidates')) {
+    $nepCandidates.style.display = 'none';
   }
 });
 
