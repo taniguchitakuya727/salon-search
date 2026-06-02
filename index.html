@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!--
   ============================================================
-  リスト検索ツール — v2.0
+  リスト検索ツール — v2.2
   ============================================================
   Released: 2026-05-24
   Source:   Google Sheets "リスト20251116"
@@ -17,6 +17,20 @@
     ✓ iOS Brave対応 (カスタムダイアログ・touchend)
     ✓ ヘッダー右上に入力フォーム (Googleフォーム) リンク
     ✓ noindex, nofollow (検索エンジン除外)
+
+  Changes in v2.2:
+    ✓ 新規登録の会員番号候補を13桁完全一致のみに変更(下3桁マッチから変更)
+
+  Changes in v2.1:
+    ✓ 新規登録に「📋 取得」ボタンを追加
+      - ファイルAのシート「メモ」A7:D7の値をフォームに自動入力
+      - 登録成功後にA7:D7を自動クリア
+      - GAS: getSourceRow / clearSourceRow アクションを追加
+    ✓ 新規登録で名前を任意項目に変更(会員番号のみ必須)
+    ✓ 新規登録の会員番号入力時に既存DB候補をプルダウン表示
+      - 13桁完全一致でヒットした候補を名前フィールド下に表示
+      - 候補タップで名前・担当・メモを自動入力
+    ✓ 日付スタンプのフォーマット変更: [YYYY/MM/DD] → YY.M/D
 
   Changes in v2.0:
     ✓ 担当リストをGASスプレッドシートで同期
@@ -1527,7 +1541,7 @@
     <input id="pwd" type="password" autocomplete="off" placeholder="••••••••" autofocus />
     <button id="unlockBtn" type="button">UNLOCK</button>
     <div id="lockMsg" class="lock-msg"></div>
-    <div class="version-tag">v2.0</div>
+    <div class="version-tag">v2.2</div>
   </div>
 </div>
 
@@ -1547,7 +1561,7 @@
 
   <header>
     <div class="title-block">
-      <div class="eyebrow">List Lookup / 下3桁・顧客名検索 <span class="version-inline">v2.0</span></div>
+      <div class="eyebrow">List Lookup / 下3桁・顧客名検索 <span class="version-inline">v2.2</span></div>
     </div>
     <div class="meta">
       B列下3桁 → B/C/D/E 表示<br>
