@@ -2000,6 +2000,8 @@ async function tryUnlock() {
     CSV_URL = payload.csv;
     GAS_URL = payload.gas;
     API_PW = payload.apiPw;
+    // ログイン成功時にlocalStorageにパスワードを保存
+    try { localStorage.setItem('salon_auth_pw', password); } catch(e) {}
     showApp();
     loadCSV();
   } catch (e) {
@@ -2107,6 +2109,8 @@ function showLock() {
   $resultBody.innerHTML = '<div class="empty">3桁の数字を入力してください</div>';
   $count.textContent = '— 件';
   $q.value = '';
+  // 🔒ロックボタンを押したらlocalStorageのパスワードも削除
+  try { localStorage.removeItem('salon_auth_pw'); } catch(e) {}
   $pwd.focus();
 }
 
@@ -2115,6 +2119,35 @@ $pwd.addEventListener('keydown', e => {
   if (e.key === 'Enter') tryUnlock();
 });
 $lockOutBtn.addEventListener('click', showLock);
+
+/* ===========================================================
+   自動ログイン (localStorageに保存済みパスワードで自動解除)
+   =========================================================== */
+async function tryAutoLogin() {
+  try {
+    const saved = localStorage.getItem('salon_auth_pw');
+    if (!saved) return;
+    dlog('auto login: trying...');
+    $lockMsg.classList.add('loading');
+    $lockMsg.textContent = '自動ログイン中…';
+    const payload = await decryptPayload(saved);
+    if (!payload.csv || !payload.csv.startsWith('http')) throw new Error('Invalid');
+    CSV_URL = payload.csv;
+    GAS_URL = payload.gas;
+    API_PW = payload.apiPw;
+    dlog('auto login: success');
+    showApp();
+    loadCSV();
+  } catch(e) {
+    try { localStorage.removeItem('salon_auth_pw'); } catch(e2) {}
+    $lockMsg.classList.remove('loading');
+    $lockMsg.textContent = '';
+    dlog('auto login: failed, showing lock screen');
+  }
+}
+
+// ページ読み込み時に自動ログインを試みる
+tryAutoLogin();
 
 /* ===========================================================
    新規登録パネル
