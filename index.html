@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!--
   ============================================================
-  リスト検索ツール — v2.2
+  リスト検索ツール — v2.21
   ============================================================
   Released: 2026-05-24
   Source:   Google Sheets "リスト20251116"
@@ -17,6 +17,11 @@
     ✓ iOS Brave対応 (カスタムダイアログ・touchend)
     ✓ ヘッダー右上に入力フォーム (Googleフォーム) リンク
     ✓ noindex, nofollow (検索エンジン除外)
+
+  Changes in v2.21:
+    ✓ パスワード入力欄に autocomplete="current-password" を設定
+      - iCloudキーチェーンへの保存・自動入力が可能に
+      - hidden usernameフィールドを追加(Safari互換性対応)
 
   Changes in v2.2:
     ✓ 新規登録の会員番号候補を13桁完全一致のみに変更(下3桁マッチから変更)
@@ -1538,10 +1543,11 @@
     <div class="lock-icon">🔒</div>
     <div class="eyebrow">Protected Access</div>
     <p class="desc">パスワードを入力してください</p>
-    <input id="pwd" type="password" autocomplete="off" placeholder="••••••••" autofocus />
+    <input type="text" autocomplete="username" style="display:none" value="staff" readonly />
+    <input id="pwd" type="password" autocomplete="current-password" placeholder="••••••••" autofocus />
     <button id="unlockBtn" type="button">UNLOCK</button>
     <div id="lockMsg" class="lock-msg"></div>
-    <div class="version-tag">v2.2</div>
+    <div class="version-tag">v2.21</div>
   </div>
 </div>
 
@@ -1561,7 +1567,7 @@
 
   <header>
     <div class="title-block">
-      <div class="eyebrow">List Lookup / 下3桁・顧客名検索 <span class="version-inline">v2.2</span></div>
+      <div class="eyebrow">List Lookup / 下3桁・顧客名検索 <span class="version-inline">v2.21</span></div>
     </div>
     <div class="meta">
       B列下3桁 → B/C/D/E 表示<br>
